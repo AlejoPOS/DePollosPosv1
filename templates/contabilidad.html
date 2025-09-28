@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>📊 Módulo de Contabilidad</h2>
+        <p class="text-muted mb-0">Gestión contable integrada</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-list-alt fa-3x text-primary"></i>
+                </div>
+                <h5>Plan Único de Cuentas</h5>
+                <p class="text-muted">Administra el catálogo de cuentas contables</p>
+                <a href="{{ url_for('puc') }}" class="btn btn-primary">Ir a PUC</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-exchange-alt fa-3x text-success"></i>
+                </div>
+                <h5>Movimientos Contables</h5>
+                <p class="text-muted">Consulta los asientos y movimientos</p>
+                <a href="{{ url_for('movimientos') }}" class="btn btn-success">Ver Movimientos</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-balance-scale fa-3x text-info"></i>
+                </div>
+                <h5>Reportes Contables</h5>
+                <p class="text-muted">Balance general y estados financieros</p>
+                <button class="btn btn-info" onclick="abrirBalance()">Ver Reportes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Resumen Contable Rápido</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="border p-3 rounded">
+                            <h6 class="text-muted">Total Activos</h6>
+                            <h4 id="total-activos" class="text-primary">$0.00</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border p-3 rounded">
+                            <h6 class="text-muted">Total Pasivos</h6>
+                            <h4 id="total-pasivos" class="text-danger">$0.00</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border p-3 rounded">
+                            <h6 class="text-muted">Patrimonio</h6>
+                            <h4 id="total-patrimonio" class="text-success">$0.00</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border p-3 rounded">
+                            <h6 class="text-muted">Utilidad del Mes</h6>
+                            <h4 id="utilidad-mes" class="text-info">$0.00</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-3">
+                    <button class="btn btn-outline-primary" onclick="cargarResumen()">Actualizar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Balance -->
+<div class="modal fade" id="modalBalance" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Balance General</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="balance-contenido">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label>Fecha de Corte</label>
+                        <input type="date" id="fecha-balance" class="form-control">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-primary" onclick="generarBalance()">Generar Balance</button>
+                    </div>
+                </div>
+                <div id="balance-resultado"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('fecha-balance').value = new Date().toISOString().split('T')[0];
+});
+
+function abrirBalance(){
+    new bootstrap.Modal(document.getElementById('modalBalance')).show();
+}
+
+async function generarBalance(){
+    const fecha = document.getElementById('fecha-balance').value;
+    if (!fecha) {
+        alert('Selecciona una fecha de corte');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/balance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_fin: fecha})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarBalance(data.balance);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error de conexión: ' + error.message);
+    }
+}
+
+function mostrarBalance(balance) {
+    const activos = balance.filter(c => c.tipo === 'activo');
+    const pasivos = balance.filter(c => c.tipo === 'pasivo');
+    const patrimonio = balance.filter(c => c.tipo === 'patrimonio');
+    
+    let html = `
+        <div class="row">
+            <div class="col-md-6">
+                <h5>ACTIVOS</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Código</th><th>Cuenta</th><th>Saldo</th></tr></thead>
+                    <tbody>
+    `;
+    
+    let totalActivos = 0;
+    activos.forEach(cuenta => {
+        html += `<tr>
+            <td>${cuenta.codigo}</td>
+            <td>${cuenta.nombre}</td>
+            <td class="text-end">$${cuenta.saldo.toFixed(2)}</td>
+        </tr>`;
+        totalActivos += cuenta.saldo;
+    });
+    
+    html += `
+                    </tbody>
+                    <tfoot><tr><th colspan="2">TOTAL ACTIVOS</th><th class="text-end">$${totalActivos.toFixed(2)}</th></tr></tfoot>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h5>PASIVOS</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Código</th><th>Cuenta</th><th>Saldo</th></tr></thead>
+                    <tbody>
+    `;
+    
+    let totalPasivos = 0;
+    pasivos.forEach(cuenta => {
+        html += `<tr>
+            <td>${cuenta.codigo}</td>
+            <td>${cuenta.nombre}</td>
+            <td class="text-end">$${cuenta.saldo.toFixed(2)}</td>
+        </tr>`;
+        totalPasivos += cuenta.saldo;
+    });
+    
+    html += `
+                    </tbody>
+                    <tfoot><tr><th colspan="2">TOTAL PASIVOS</th><th class="text-end">$${totalPasivos.toFixed(2)}</th></tr></tfoot>
+                </table>
+                
+                <h5 class="mt-4">PATRIMONIO</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Código</th><th>Cuenta</th><th>Saldo</th></tr></thead>
+                    <tbody>
+    `;
+    
+    let totalPatrimonio = 0;
+    patrimonio.forEach(cuenta => {
+        html += `<tr>
+            <td>${cuenta.codigo}</td>
+            <td>${cuenta.nombre}</td>
+            <td class="text-end">$${cuenta.saldo.toFixed(2)}</td>
+        </tr>`;
+        totalPatrimonio += cuenta.saldo;
+    });
+    
+    html += `
+                    </tbody>
+                    <tfoot><tr><th colspan="2">TOTAL PATRIMONIO</th><th class="text-end">$${totalPatrimonio.toFixed(2)}</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>TOTAL ACTIVOS: $${totalActivos.toFixed(2)}</h6>
+            </div>
+            <div class="col-md-6 text-end">
+                <h6>PASIVOS + PATRIMONIO: $${(totalPasivos + totalPatrimonio).toFixed(2)}</h6>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('balance-resultado').innerHTML = html;
+}
+
+async function cargarResumen(){
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    try {
+        const response = await fetch('/api/balance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_fin: hoy})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const activos = data.balance.filter(c => c.tipo === 'activo').reduce((sum, c) => sum + c.saldo, 0);
+            const pasivos = data.balance.filter(c => c.tipo === 'pasivo').reduce((sum, c) => sum + c.saldo, 0);
+            const patrimonio = data.balance.filter(c => c.tipo === 'patrimonio').reduce((sum, c) => sum + c.saldo, 0);
+            const ingresos = data.balance.filter(c => c.tipo === 'ingreso').reduce((sum, c) => sum + c.saldo, 0);
+            const gastos = data.balance.filter(c => c.tipo === 'gasto').reduce((sum, c) => sum + c.saldo, 0);
+            
+            document.getElementById('total-activos').textContent = '$' + activos.toFixed(2);
+            document.getElementById('total-pasivos').textContent = '$' + pasivos.toFixed(2);
+            document.getElementById('total-patrimonio').textContent = '$' + patrimonio.toFixed(2);
+            document.getElementById('utilidad-mes').textContent = '$' + (ingresos - gastos).toFixed(2);
+        }
+    } catch (error) {
+        console.log('Error cargando resumen:', error);
+    }
+}
+
+// Cargar resumen al iniciar
+cargarResumen();
+</script>
+{% endblock %}

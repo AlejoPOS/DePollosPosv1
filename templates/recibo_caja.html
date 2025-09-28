@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Recibo de Caja</h2>
+    <form id="reciboCajaForm">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label>Número</label>
+                <input type="text" class="form-control" id="numero" value="{{ numero }}" readonly>
+            </div>
+            <div class="col-md-3">
+                <label>Fecha</label>
+                <input type="date" class="form-control" id="fecha" value="{{ fecha }}">
+            </div>
+            <div class="col-md-6">
+                <label>Tercero</label>
+                <select class="form-control" id="tercero_id">
+                    {% for c in clientes %}
+                        <option value="{{ c.id }}">{{ c.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label>Concepto</label>
+            <input type="text" class="form-control" id="concepto" placeholder="Motivo del ingreso">
+        </div>
+        <div class="mb-3">
+            <label>Valor</label>
+            <input type="number" class="form-control" id="valor" step="0.01">
+        </div>
+        <button type="button" class="btn btn-success" onclick="guardarRecibo()">💾 Guardar Recibo</button>
+    </form>
+</div>
+
+<script>
+function guardarRecibo() {
+    const data = {
+        numero: document.getElementById("numero").value,
+        fecha: document.getElementById("fecha").value,
+        tercero_id: document.getElementById("tercero_id").value,
+        concepto: document.getElementById("concepto").value,
+        valor: document.getElementById("valor").value
+    };
+
+    fetch("/recibo_caja/save", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(resp => {
+        if (resp.success) {
+            alert("✅ Recibo de caja guardado correctamente #" + resp.recibo_num);
+            window.location.reload();
+        } else {
+            alert("❌ Error: " + resp.error);
+        }
+    });
+}
+</script>
+{% endblock %}

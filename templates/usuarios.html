@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios del Sistema</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+  <h2 class="mb-4">👥 Usuarios del Sistema</h2>
+
+  <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalAddUser">
+    ➕ Nuevo Usuario
+  </button>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Usuario</th>
+        <th>Rol</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Ejemplo de filas de usuarios -->
+      <tr>
+        <td>1</td>
+        <td>admin</td>
+        <td>admin</td>
+        <td><span class="badge bg-success">Activo</span></td>
+        <td>
+          <button type="button" class="btn btn-warning btn-sm btn-toggle" data-user-id="1">
+            Cambiar Estado
+          </button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal Nuevo Usuario -->
+<div class="modal fade" id="modalAddUser" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formAddUser">
+        <div class="modal-header">
+          <h5 class="modal-title">➕ Nuevo Usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="usuario" class="form-label">Usuario</label>
+            <input autocomplete="username" type="text" class="form-control" id="usuario" name="usuario" required>
+          </div>
+          <div class="mb-3">
+            <label for="clave" class="form-label">Contraseña</label>
+            <input autocomplete="new-password" type="password" class="form-control" id="clave" name="clave" required>
+          </div>
+          <div class="mb-3">
+            <label for="rol" class="form-label">Rol</label>
+            <select class="form-select" id="rol" name="rol">
+              <option value="admin">Administrador</option>
+              <option value="cajero" selected>Cajero</option>
+              <option value="contador">Contador</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM cargado, inicializando eventos...');
+
+  // 1) Manejadores para botones de cambiar estado
+  document.querySelectorAll('.btn-toggle').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const id = this.dataset.userId;
+      console.log('Toggle usuario ID:', id);
+      
+      if (!id) {
+        console.error("No se encontró user id en el botón");
+        alert("Error: No se pudo identificar el usuario");
+        return;
+      }
+      
+      if (!confirm("¿Cambiar estado del usuario #" + id + "?")) return;
+
+      try {
+        console.log("➡️ POST /ajustes/usuarios/toggle/" + id);
+        const res = await fetch(`/ajustes/usuarios/toggle/${id}`, { 
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        
+        const data = await res.json();
+        console.log("⬅️ respuesta toggle:", data);
+        
+        if (data.success) {
+          alert("Estado cambiado correctamente");
+          location.reload();
+        } else {
+          alert("Error: " + (data.error || "desconocido"));
+        }
+      } catch (err) {
+        console.error("Error al cambiar estado:", err);
+        alert("Error de conexión con el servidor: " + err.message);
+      }
+    });
+  });
+
+  // 2) Manejador para el formulario de agregar usuario
+  const form = document.getElementById('formAddUser');
+  if (!form) {
+    console.error('No se encontró el formulario formAddUser');
+    return;
+  }
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    console.log('Formulario enviado');
+
+    // Obtener valores del formulario
+    const usuarioInput = document.getElementById('usuario');
+    const claveInput = document.getElementById('clave');
+    const rolSelect = document.getElementById('rol');
+
+    if (!usuarioInput || !claveInput || !rolSelect) {
+      console.error('No se encontraron todos los campos del formulario');
+      alert('Error: No se pudieron encontrar todos los campos del formulario');
+      return;
+    }
+
+    const payload = {
+      usuario: usuarioInput.value.trim(),
+      clave: claveInput.value,
+      rol: rolSelect.value
+    };
+
+    console.log('Payload a enviar:', payload);
+
+    // Validaciones
+    if (!payload.usuario || !payload.clave) {
+      alert("Usuario y contraseña son requeridos");
+      return;
+    }
+
+    if (payload.usuario.length < 3) {
+      alert("El usuario debe tener al menos 3 caracteres");
+      return;
+    }
+
+    if (payload.clave.length < 4) {
+      alert("La contraseña debe tener al menos 4 caracteres");
+      return;
+    }
+
+    try {
+      console.log("➡️ POST /ajustes/usuarios/add", payload);
+      
+      const res = await fetch("/ajustes/usuarios/add", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log('Response status:', res.status);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      console.log("⬅️ respuesta add:", data);
+
+      if (data.success) {
+        // Cerrar modal
+        const modalEl = document.getElementById('modalAddUser');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+
+        // Limpiar formulario
+        form.reset();
+        
+        alert("Usuario creado correctamente: " + (data.mensaje || ""));
+        
+        // Recargar página
+        setTimeout(() => {
+          location.reload();
+        }, 500);
+        
+      } else {
+        alert("Error: " + (data.error || "Error desconocido"));
+      }
+    } catch (err) {
+      console.error("Error creando usuario:", err);
+      alert("No se pudo conectar con el servidor: " + err.message);
+    }
+  });
+
+  // 3) Debug: Verificar que el modal se puede abrir
+  const modalTrigger = document.querySelector('[data-bs-target="#modalAddUser"]');
+  if (modalTrigger) {
+    modalTrigger.addEventListener('click', function() {
+      console.log('Modal trigger clicked');
+    });
+  }
+
+  // 4) Event listener para cuando el modal se muestra
+  const modalEl = document.getElementById('modalAddUser');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', function() {
+      console.log('Modal mostrado');
+      // Enfocar el campo usuario cuando se abre el modal
+      const usuarioInput = document.getElementById('usuario');
+      if (usuarioInput) {
+        usuarioInput.focus();
+      }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function() {
+      console.log('Modal cerrado');
+      // Limpiar el formulario cuando se cierra el modal
+      const form = document.getElementById('formAddUser');
+      if (form) {
+        form.reset();
+      }
+    });
+  }
+});
+</script>
+
+</body>
+</html>

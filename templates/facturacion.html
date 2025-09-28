@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-3">
+    <h2>🧾 Facturación</h2>
+    <a href="{{ url_for('facturas') }}" class="btn btn-outline-primary">📋 Ver Facturas</a>
+</div>
+
+<div id="alert-placeholder"></div>
+
+<div class="card mb-3 p-3">
+    <form id="line-form" onsubmit="return false;">
+        <div class="row g-2">
+
+            <!-- Cliente con botón agregar inline -->
+            <div class="col-md-4">
+                <label class="form-label">Cliente</label>
+                <div class="input-group mb-2">
+                    <select id="cliente" class="form-select">
+                        <option value="">-- Selecciona cliente --</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}">{{ c.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline-primary" onclick="toggleFormCliente()">➕</button>
+                </div>
+
+                <!-- Formulario inline oculto -->
+                <div id="form-nuevo-cliente" style="display:none; margin-top:5px;">
+                    <input id="cli_nombres" class="form-control mb-1" placeholder="Nombres">
+                    <input id="cli_apellidos" class="form-control mb-1" placeholder="Apellidos">
+                    <input id="cli_telefono" class="form-control mb-1" placeholder="Teléfono">
+                    <input id="cli_correo" class="form-control mb-1" placeholder="Correo">
+                    <input id="cli_direccion" class="form-control mb-1" placeholder="Dirección">
+                    <button type="button" class="btn btn-success w-100" onclick="guardarCliente()">Guardar Cliente</button>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Factura N°</label>
+                <input id="factura_num" class="form-control" value="{{ factura_num }}" readonly>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha</label>
+                <input id="fecha" class="form-control" value="{{ fecha }}" readonly>
+            </div>
+
+            <!-- Producto -->
+            <div class="col-md-4">
+                <label class="form-label">Producto</label>
+                <select id="producto" class="form-select" required>
+                    <option value="">-- Selecciona --</option>
+                    {% for p in productos %}
+                    <option value="{{ p.id }}" data-stock="{{ p.stock }}" data-costo="{{ p.costo }}">{{ p.nombre }} (Stock: {{ p.stock }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Cantidad</label>
+                <input id="cantidad" type="number" min="0.01" step="0.01" class="form-control">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Precio</label>
+                <input id="precio" type="number" step="0.01" class="form-control">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Total</label>
+                <input id="total_line" class="form-control" readonly>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnAgregar" class="btn btn-primary w-100">➕ Agregar</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Tabla de factura -->
+<div class="card mb-3 p-3">
+    <h5>Factura actual</h5>
+    <div class="table-responsive">
+        <table class="table table-sm" id="tabla-factura">
+            <thead>
+                <tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Total</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="d-flex justify-content-end">
+        <h5 class="me-3">Total: <span id="total-factura">0.00</span></h5>
+        <button id="btnGuardar" class="btn btn-success">💾 Guardar factura</button>
+    </div>
+</div>
+
+<script>
+let lines = [];
+
+const productoSel = document.getElementById('producto');
+const cantidadInput = document.getElementById('cantidad');
+const precioInput = document.getElementById('precio');
+const totalLineInput = document.getElementById('total_line');
+const tablaBody = document.querySelector('#tabla-factura tbody');
+const totalFacturaSpan = document.getElementById('total-factura');
+
+productoSel.addEventListener('change', () => {
+    const opt = productoSel.selectedOptions[0];
+    if(!opt || !opt.value){ precioInput.value=''; cantidadInput.value=''; totalLineInput.value=''; return; }
+    precioInput.value = parseFloat(opt.dataset.costo || 0).toFixed(2);
+    cantidadInput.value = 1;
+    calcularTotalLine();
+});
+cantidadInput.addEventListener('input', calcularTotalLine);
+precioInput.addEventListener('input', calcularTotalLine);
+
+function calcularTotalLine() {
+    const t = (parseFloat(cantidadInput.value)||0)*(parseFloat(precioInput.value)||0);
+    totalLineInput.value = t ? t.toFixed(2) : '';
+}
+
+document.getElementById('btnAgregar').addEventListener('click', () => {
+    const opt = productoSel.selectedOptions[0];
+    if(!opt || !opt.value){ showAlert('Seleccione un producto'); return; }
+    const producto_id = parseInt(opt.value);
+    const producto = opt.text;
+    const stock = parseFloat(opt.dataset.stock || 0);
+    const cantidad = parseFloat(cantidadInput.value) || 0;
+    const precio = parseFloat(precioInput.value) || 0;
+    if(!cantidad || cantidad<=0){ showAlert('Cantidad inválida'); return; }
+    if(cantidad>stock){ showAlert(`Stock insuficiente. Disponible: ${stock}`); return; }
+    const total = +(cantidad*precio);
+    lines.push({producto_id, producto, cantidad, precio, total});
+    renderTable();
+    productoSel.selectedIndex = 0;
+    cantidadInput.value=''; precioInput.value=''; totalLineInput.value='';
+});
+
+function renderTable(){
+    tablaBody.innerHTML = '';
+    let sum = 0;
+    lines.forEach((ln,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${ln.producto}</td><td>${ln.cantidad}</td><td>${ln.precio.toFixed(2)}</td><td>${ln.total.toFixed(2)}</td><td><button class="btn btn-sm btn-outline-danger" data-i="${i}">Eliminar</button></td>`;
+        tablaBody.appendChild(tr);
+        sum+=ln.total;
+    });
+    totalFacturaSpan.textContent=sum.toFixed(2);
+    document.querySelectorAll('#tabla-factura button[data-i]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+            const idx=parseInt(btn.dataset.i);
+            lines.splice(idx,1);
+            renderTable();
+        });
+    });
+}
+
+async function guardarFactura(){
+    const clienteSelect=document.getElementById('cliente');
+    const clienteId=clienteSelect.value;
+    const factura_num=document.getElementById('factura_num').value;
+    const fecha=document.getElementById('fecha').value;
+    if(!clienteId){ showAlert('Seleccione cliente'); return; }
+    if(lines.length===0){ showAlert('Agrega al menos una línea'); return; }
+    const payload={ cliente_id: parseInt(clienteId), factura_num: parseInt(factura_num), fecha, lines };
+    try{
+        const res=await fetch("{{ url_for('facturacion_save') }}",{
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+        });
+        const data=await res.json();
+        if(!data.success){ showAlert(data.error||'Error', 'danger'); }
+        else{
+            showAlert(`Factura guardada: ${data.factura_num}`,'success');
+            lines=[];
+            renderTable();
+            setTimeout(()=>location.reload(),900);
+        }
+    } catch(err){ showAlert("Error de red: "+err.message,"danger"); }
+}
+document.getElementById('btnGuardar').addEventListener('click', guardarFactura);
+
+function showAlert(msg,type='warning'){
+    const ph=document.getElementById('alert-placeholder');
+    ph.innerHTML=`<div class="alert alert-${type} alert-dismissible" role="alert">${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+
+// Funciones para formulario inline
+function toggleFormCliente(){
+    const form=document.getElementById("form-nuevo-cliente");
+    form.style.display=(form.style.display==='none')?'block':'none';
+}
+
+async function guardarCliente(){
+    const payload={
+        nombres: document.getElementById("cli_nombres").value,
+        apellidos: document.getElementById("cli_apellidos").value,
+        telefono: document.getElementById("cli_telefono").value,
+        correo: document.getElementById("cli_correo").value,
+        direccion: document.getElementById("cli_direccion").value,
+        tipo:"Cliente"
+    };
+    try{
+        const res=await fetch("{{ url_for('add_tercero') }}",{
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+        });
+        const data=await res.json();
+        if(data.success){
+            const sel=document.getElementById("cliente");
+            sel.innerHTML+=`<option value="${data.id}" selected>${data.nombre}</option>`;
+            document.getElementById("form-nuevo-cliente").style.display='none';
+            document.getElementById("form-nuevo-cliente").querySelectorAll("input").forEach(i=>i.value='');
+        } else { alert("Error: "+data.error); }
+    }catch(err){ alert("Error de conexión: "+err.message); }
+}
+</script>
+{% endblock %}

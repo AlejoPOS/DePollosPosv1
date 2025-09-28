@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Módulo de Gastos</h2>
+  <p>Selecciona la opción que deseas utilizar:</p>
+  <div class="list-group">
+    <a href="{{ url_for('recibo_caja') }}" class="list-group-item list-group-item-action">
+      ➕ Recibo de Caja (Ingresos de dinero)
+    </a>
+    <a href="{{ url_for('comprobante_egreso') }}" class="list-group-item list-group-item-action">
+      ➖ Comprobante de Egreso (Pagos / Salidas de dinero)
+    </a>
+  </div>
+</div>
+{% endblock %}

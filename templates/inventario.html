@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>📋 Inventario</h2>
+        <p class="text-muted mb-0">Lista de productos disponibles</p>
+    </div>
+    <div class="d-flex gap-2">
+       <div class="d-flex gap-2">
+    <a href="{{ url_for('transformaciones') }}" class="btn btn-warning">🔄 Transformaciones</a>
+    <button class="btn btn-outline-primary" onclick="toggleStats()">📊 Estadísticas</button>
+    <button class="btn btn-success" onclick="toggleFormProducto()">➕ Nuevo Producto</button>
+</div>
+    </div>
+</div>
+
+<div id="form-nuevo-producto" class="card mb-4 p-3" style="display:none;">
+    <h5 class="card-title">Nuevo Producto</h5>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <input id="prod_nombre" class="form-control mb-1" placeholder="Nombre del producto" required>
+        </div>
+        <div class="col-md-2">
+            <input id="prod_stock" type="number" class="form-control mb-1" placeholder="Stock" min="0" required>
+        </div>
+        <div class="col-md-2">
+            <input id="prod_costo" type="number" class="form-control mb-1" placeholder="Costo" min="0" step="0.01" required>
+        </div>
+        <div class="col-md-3">
+            <input id="prod_precio" type="number" class="form-control mb-1" placeholder="Precio de Venta" min="0" step="0.01" required>
+        </div>
+        <div class="col-md-2 d-flex">
+            <button type="button" class="btn btn-primary w-100" onclick="guardarProducto()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div id="stats-panel" class="card mb-4" style="display:none;">
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <div class="bg-primary text-white p-3 rounded">
+                    <h5 id="total-productos">0</h5>
+                    <small>Total Productos</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="bg-success text-white p-3 rounded">
+                    <h5 id="stock-total">0</h5>
+                    <small>Stock Total</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="bg-warning text-white p-3 rounded">
+                    <h5 id="productos-bajo-stock">0</h5>
+                    <small>Stock Bajo (&lt;10)</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="bg-info text-white p-3 rounded">
+                    <h5 id="valor-inventario">$0</h5>
+                    <small>Valor Inventario</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4 p-3">
+    <div class="row g-2">
+        <div class="col-md-4">
+            <input type="text" id="buscar" class="form-control" placeholder="🔍 Buscar producto...">
+        </div>
+        <div class="col-md-3">
+            <select id="filtro-stock" class="form-select">
+                <option value="">Todos los stocks</option>
+                <option value="alto">Stock alto (&gt;50)</option>
+                <option value="medio">Stock medio (11-50)</option>
+                <option value="bajo">Stock bajo (&lt;=10)</option>
+                <option value="agotado">Sin stock (0)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="ordenar" class="form-select">
+                <option value="nombre">Ordenar por nombre</option>
+                <option value="stock-desc">Stock mayor a menor</option>
+                <option value="stock-asc">Stock menor a mayor</option>
+                <option value="costo-desc">Costo mayor a menor</option>
+                <option value="costo-asc">Costo menor a mayor</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100" onclick="limpiarFiltros()">🗑️ Limpiar</button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tabla-inventario">
+            <thead class="table-dark">
+                <tr>
+                    <th>Producto</th>
+                    <th>Stock</th>
+                    <th>Costo</th>
+                    <th>Precio de Venta</th>
+                    <th>Valor Total</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in productos %}
+                <tr data-producto='{{ p | tojson }}'>
+                    <td><strong>{{ p["nombre"] }}</strong></td>
+                    <td>
+                        <span class="badge {% if p['stock'] <= 0 %}bg-danger{% elif p['stock'] <= 10 %}bg-warning{% elif p['stock'] <= 50 %}bg-info{% else %}bg-success{% endif %}">
+                            {{ p["stock"] }}
+                        </span>
+                    </td>
+                    <td>${{ "%.2f"|format(p["costo"]) }}</td>
+                    <td>${{ "%.2f"|format(p["precio"]) }}</td>
+                    <td><strong>${{ "%.2f"|format(p["stock"] * p["costo"]) }}</strong></td>
+                    <td>
+                        {% if p['stock'] <= 0 %}
+                            <span class="badge bg-danger">Agotado</span>
+                        {% elif p['stock'] <= 10 %}
+                            <span class="badge bg-warning">Stock Bajo</span>
+                        {% elif p['stock'] <= 50 %}
+                            <span class="badge bg-info">Stock Medio</span>
+                        {% else %}
+                            <span class="badge bg-success">Stock Alto</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editarProducto({{ p['id'] }})">✏️</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="verDetalles('{{ p['nombre'] }}', {{ p['stock'] }}, {{ p['costo'] }}, {{ p['precio'] }})">👁️</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3 text-muted">
+    <small>Total de registros: <span id="total-registros">{{ productos|length }}</span></small>
+</div>
+
+<div class="modal fade" id="modalDetalles" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📦 Detalles del Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalles-contenido"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    actualizarEstadisticas();
+    configurarFiltros();
+});
+
+// FILTROS Y ORDENAMIENTO
+function configurarFiltros(){
+    document.getElementById('buscar').addEventListener('input', filtrarTabla);
+    document.getElementById('filtro-stock').addEventListener('change', filtrarTabla);
+    document.getElementById('ordenar').addEventListener('change', ordenarTabla);
+}
+
+function filtrarTabla(){
+    const buscar = document.getElementById('buscar').value.toLowerCase();
+    const filtroStock = document.getElementById('filtro-stock').value;
+    const filas = document.querySelectorAll('#tabla-inventario tbody tr');
+    let visibles = 0;
+    filas.forEach(fila=>{
+        const producto = fila.querySelector('td:first-child strong').textContent.toLowerCase();
+        const stock = parseInt(fila.querySelector('.badge').textContent);
+        let mostrar = true;
+        if(buscar && !producto.includes(buscar)) mostrar=false;
+        if(filtroStock){
+            switch(filtroStock){
+                case 'alto': mostrar = mostrar && stock>50; break;
+                case 'medio': mostrar = mostrar && stock>=11 && stock<=50; break;
+                case 'bajo': mostrar = mostrar && stock>0 && stock<=10; break;
+                case 'agotado': mostrar = mostrar && stock===0; break;
+            }
+        }
+        fila.style.display = mostrar?'':'none';
+        if(mostrar) visibles++;
+    });
+    document.getElementById('total-registros').textContent = visibles;
+}
+
+function ordenarTabla(){
+    const orden = document.getElementById('ordenar').value;
+    const tbody = document.querySelector('#tabla-inventario tbody');
+    const filas = Array.from(tbody.querySelectorAll('tr'));
+    filas.sort((a,b)=>{
+        switch(orden){
+            case 'nombre': return a.querySelector('strong').textContent.localeCompare(b.querySelector('strong').textContent);
+            case 'stock-desc': return parseInt(b.querySelector('.badge').textContent)-parseInt(a.querySelector('.badge').textContent);
+            case 'stock-asc': return parseInt(a.querySelector('.badge').textContent)-parseInt(b.querySelector('.badge').textContent);
+            case 'costo-desc': return parseFloat(b.cells[2].textContent.replace('$',''))-parseFloat(a.cells[2].textContent.replace('$',''));
+            case 'costo-asc': return parseFloat(a.cells[2].textContent.replace('$',''))-parseFloat(b.cells[2].textContent.replace('$',''));
+        }
+    });
+    filas.forEach(f=>tbody.appendChild(f));
+}
+
+function limpiarFiltros(){
+    document.getElementById('buscar').value='';
+    document.getElementById('filtro-stock').value='';
+    document.getElementById('ordenar').value='nombre';
+    filtrarTabla();
+    ordenarTabla();
+}
+
+// ESTADÍSTICAS
+function toggleStats(){
+    const panel=document.getElementById('stats-panel');
+    panel.style.display=(panel.style.display==='none')?'block':'none';
+    actualizarEstadisticas();
+}
+
+function actualizarEstadisticas(){
+    const filas = document.querySelectorAll('#tabla-inventario tbody tr');
+    let total=0, stockTotal=0, bajo=0, valor=0;
+    filas.forEach(f=>{
+        if(f.style.display==='none') return;
+        total++;
+        const stock=parseInt(f.querySelector('.badge').textContent);
+        const costo=parseFloat(f.cells[2].textContent.replace('$',''));
+        stockTotal+=stock;
+        valor+=stock*costo;
+        if(stock<=10) bajo++;
+    });
+    document.getElementById('total-productos').textContent=total;
+    document.getElementById('stock-total').textContent=stockTotal.toLocaleString();
+    document.getElementById('productos-bajo-stock').textContent=bajo;
+    document.getElementById('valor-inventario').textContent='$'+valor.toFixed(2);
+}
+
+// DETALLES
+function verDetalles(nombre, stock, costo, precio){
+    let estado='', cls='';
+    if(stock<=0){ estado='Agotado'; cls='danger'; }
+    else if(stock<=10){ estado='Stock Bajo'; cls='warning'; }
+    else if(stock<=50){ estado='Stock Medio'; cls='info'; }
+    else { estado='Stock Alto'; cls='success'; }
+    const contenido=`
+    <div class="row">
+        <div class="col-12"><h4>${nombre}</h4><hr></div>
+        <div class="col-6"><strong>Stock Actual:</strong><br><span class="badge bg-${cls} fs-6">${stock}</span></div>
+        <div class="col-6"><strong>Estado:</strong><br><span class="badge bg-${cls} fs-6">${estado}</span></div>
+        <div class="col-6 mt-3"><strong>Costo Unitario:</strong><br>$${costo.toFixed(2)}</div>
+        <div class="col-6 mt-3"><strong>Precio de Venta:</strong><br>$${precio.toFixed(2)}</div>
+        <div class="col-6 mt-3"><strong>Valor Total (a Costo):</strong><br>$${(stock*costo).toFixed(2)}</div>
+    </div>`;
+    document.getElementById('detalles-contenido').innerHTML=contenido;
+    new bootstrap.Modal(document.getElementById('modalDetalles')).show();
+}
+
+// FORMULARIO EN LÍNEA
+function toggleFormProducto() {
+    const form = document.getElementById("form-nuevo-producto");
+    form.style.display = (form.style.display === 'none') ? 'block' : 'none';
+}
+
+async function guardarProducto() {
+    const nombre = document.getElementById("prod_nombre").value.trim();
+    const stock = document.getElementById("prod_stock").value;
+    const costo = document.getElementById("prod_costo").value;
+    const precio = document.getElementById("prod_precio").value;
+
+    if (!nombre || !stock || !costo || !precio) {
+        alert('Todos los campos son obligatorios.');
+        return;
+    }
+
+    const payload = {
+        nombre: nombre,
+        stock: stock,
+        costo: costo,
+        precio: precio
+    };
+
+    try {
+        const res = await fetch("{{ url_for('add_producto') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`Producto "${nombre}" agregado con éxito.`);
+            document.getElementById("form-nuevo-producto").style.display = 'none';
+            document.getElementById("form-nuevo-producto").querySelectorAll("input").forEach(i => i.value = '');
+            location.reload();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (err) {
+        alert("Error de conexión: " + err.message);
+    }
+}
+
+// EDITAR PRODUCTO (MODAL)
+function editarProducto(id){
+    const filas=Array.from(document.querySelectorAll('#tabla-inventario tbody tr'));
+    const producto=filas.map(f=>JSON.parse(f.getAttribute('data-producto'))).find(p=>p.id===id);
+    if(!producto){ alert('Producto no encontrado'); return; }
+
+    const modal=document.getElementById('modalProducto');
+    modal.querySelector('.modal-title').textContent='✏️ Editar Producto';
+    modal.querySelector('#nuevo-nombre').value=producto.nombre;
+    modal.querySelector('#nuevo-stock').value=producto.stock;
+    modal.querySelector('#nuevo-costo').value=producto.costo;
+    modal.querySelector('#nuevo-precio').value=producto.precio;
+
+    modal.querySelector('button.btn-success').onclick=function(){
+        const nombre=modal.querySelector('#nuevo-nombre').value.trim();
+        const stock=parseInt(modal.querySelector('#nuevo-stock').value)||0;
+        const costo=parseFloat(modal.querySelector('#nuevo-costo').value)||0;
+        const precio=parseFloat(modal.querySelector('#nuevo-precio').value)||0;
+        if(!nombre){ alert('Nombre requerido'); return; }
+
+        // Aquí iría el POST/PUT al backend
+        alert(`Producto "${nombre}" actualizado\nStock: ${stock}\nCosto: $${costo.toFixed(2)}\nPrecio: $${precio.toFixed(2)}`);
+        bootstrap.Modal.getInstance(modal).hide();
+    }
+
+    new bootstrap.Modal(modal).show();
+}
+</script>
+
+<style>
+.badge{font-size:.875rem;}
+.table th{border-top:none;}
+.card{box-shadow:0 .125rem .25rem rgba(0,0,0,.075);border:1px solid rgba(0,0,0,.125);}
+.page-header h2{color:#495057;}
+.btn-outline-primary:hover,.btn-outline-info:hover{color:white;}
+#stats-panel .rounded{border-radius:.5rem !important;}
+.table-hover tbody tr:hover{background-color:rgba(0,0,0,.025);}
+</style>
+{% endblock %}

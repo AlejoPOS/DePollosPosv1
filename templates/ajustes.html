@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Ajustes del Sistema</h2>
+  <p>Selecciona una opción:</p>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <a href="{{ url_for('ajustes_usuarios') }}" class="card text-center text-decoration-none p-3 h-100">
+        <div style="font-size:2rem;">👥</div>
+        <div class="card-body">
+          <h5 class="card-title">Usuarios</h5>
+          <p class="card-text">Crear y administrar usuarios y roles</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4">
+      <a href="#" class="card text-center text-decoration-none p-3 h-100">
+        <div style="font-size:2rem;">⚙️</div>
+        <div class="card-body">
+          <h5 class="card-title">Configuración</h5>
+          <p class="card-text">Datos de empresa, impuestos, etc.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4">
+      <a href="#" class="card text-center text-decoration-none p-3 h-100">
+        <div style="font-size:2rem;">💾</div>
+        <div class="card-body">
+          <h5 class="card-title">Copias de seguridad</h5>
+          <p class="card-text">Exportar / importar base de datos</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

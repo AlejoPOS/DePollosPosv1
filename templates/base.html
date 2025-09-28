@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>De Pollos POS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .sidebar {
+            width: 220px;
+            background-color: #fff3e6;
+            padding: 20px;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+        }
+        .sidebar h2 {
+            font-size: 1.4rem;
+            color: #cc6600;
+            margin-bottom: 1.5rem;
+        }
+        .sidebar a {
+            display: block;
+            margin: 8px 0;
+            padding: 10px;
+            text-decoration: none;
+            background-color: #ff6600;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        .sidebar a:hover {
+            background-color: #e65c00;
+        }
+        .content {
+            flex: 1;
+            padding: 2rem;
+            background-color: #fff8f0;
+        }
+        hr {
+            margin: 1.5rem 0;
+        }
+        .btn-logout {
+            display: block;
+            margin-top: 1rem;
+            padding: 10px;
+            text-align: center;
+            background-color: #dc3545;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+        .btn-logout:hover {
+            background-color: #bb2d3b;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>🐔 De Pollos POS</h2>
+        <a href="{{ url_for('facturacion') }}">🧾 Facturación</a>
+        <a href="{{ url_for('inventario') }}">📋 Inventario</a>
+        <a href="{{ url_for('compras') }}">📦 Compras</a>
+        <a href="{{ url_for('gastos') }}">💸 Gastos</a>
+        <a href="{{ url_for('contabilidad') }}">📊 Contabilidad</a>
+        <a href="{{ url_for('resumenes') }}">📈 Resumen</a>
+        <hr>
+        <a href="{{ url_for('ajustes') }}">⚙️ Ajustes</a>
+        <a href="{{ url_for('logout') }}" class="btn-logout">🚪 Cerrar sesión</a>
+    </div>
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

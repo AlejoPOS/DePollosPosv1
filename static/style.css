@@ -1,0 +1,13 @@
+
+/* Shared styling to match the menu look */
+body { background:#fff8f0; font-family: Arial, sans-serif; margin:0; }
+.app-shell { display:flex; min-height:100vh; }
+.sidebar { width:220px; background:#cc0000; color:#fff; padding:20px; box-sizing:border-box; }
+.sidebar .brand { font-size:18px; font-weight:bold; margin-bottom:12px; }
+.sidebar nav a { display:block; background:#ffcc00; color:#000; text-decoration:none; padding:10px; margin-bottom:8px; border-radius:6px; font-weight:bold; text-align:center; }
+.sidebar nav a:hover { background:#ffb300; }
+.content { flex:1; padding:24px; box-sizing:border-box; }
+.center-card { max-width:420px; margin:60px auto; background:#fff; padding:20px; border-radius:10px; box-shadow:0 8px 20px rgba(0,0,0,0.08); }
+.menu-container { max-width:600px; margin:20px auto; padding:2rem; background:#ffffff; border-radius:1rem; box-shadow:0 8px 20px rgba(0,0,0,0.1); }
+.btn-custom { background-color:#ff6600; border:none; }
+.btn-custom:hover { background-color:#e65c00; }

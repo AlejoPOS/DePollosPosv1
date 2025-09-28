@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>📊 Resúmenes y Reportes</h2>
+
+<!-- Filtros simples -->
+<div class="card mb-4 p-3">
+    <div class="row">
+        <div class="col-md-3">
+            <label>Fecha Inicio</label>
+            <input type="date" id="fechaInicio" class="form-control" value="{{ fecha_inicio }}">
+        </div>
+        <div class="col-md-3">
+            <label>Fecha Fin</label>
+            <input type="date" id="fechaFin" class="form-control" value="{{ fecha_fin }}">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary w-100" onclick="buscar()">🔍 Consultar</button>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
+            <button class="btn btn-outline-secondary" onclick="setHoy()">Hoy</button>
+            <button class="btn btn-outline-secondary" onclick="setSemana()">Semana</button>
+            <button class="btn btn-outline-secondary" onclick="setMes()">Mes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen básico -->
+<div id="resultados" style="display:none;">
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center bg-primary text-white">
+                <div class="card-body">
+                    <h4 id="totalVentas">$0</h4>
+                    <p>Total Ventas</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-success text-white">
+                <div class="card-body">
+                    <h4 id="totalCompras">$0</h4>
+                    <p>Total Compras</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-info text-white">
+                <div class="card-body">
+                    <h4 id="utilidad">$0</h4>
+                    <p>Utilidad</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-warning text-white">
+                <div class="card-body">
+                    <h4 id="numFacturas">0</h4>
+                    <p>Facturas</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tablas simples -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Facturas del Período</h5>
+                    <button class="btn btn-sm btn-outline-success" onclick="exportarDatos()">📤 Exportar</button>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Cliente</th>
+                                <th>Fecha</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaFacturas"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Compras del Período</h5>
+                    <button class="btn btn-sm btn-outline-info" onclick="actualizarDatos()">🔄 Actualizar</button>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Proveedor</th>
+                                <th>Fecha</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCompras"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function buscar() {
+    const inicio = document.getElementById('fechaInicio').value;
+    const fin = document.getElementById('fechaFin').value;
+
+    if (!inicio || !fin) {
+        alert('Selecciona ambas fechas');
+        return;
+    }
+
+    cargarVentas(inicio, fin);
+    cargarCompras(inicio, fin);
+    cargarFacturas(inicio, fin);
+    cargarComprasTabla(inicio, fin);
+    document.getElementById('resultados').style.display = 'block';
+}
+
+async function cargarVentas(inicio, fin) {
+    try {
+        const response = await fetch('/api/resumen/ventas', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_inicio: inicio, fecha_fin: fin})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const total = data.total_periodo.total || 0;
+            const facturas = data.total_periodo.facturas || 0;
+
+            document.getElementById('totalVentas').textContent = '$' + total.toFixed(2);
+            document.getElementById('numFacturas').textContent = facturas;
+        }
+    } catch (error) {
+        console.log('Error ventas:', error);
+    }
+}
+
+async function cargarCompras(inicio, fin) {
+    try {
+        const response = await fetch('/api/resumen/compras', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_inicio: inicio, fecha_fin: fin})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const total = data.total_compras.total || 0;
+            document.getElementById('totalCompras').textContent = '$' + total.toFixed(2);
+
+            const ventas = parseFloat(document.getElementById('totalVentas').textContent.replace('$', ''));
+            const utilidad = ventas - total;
+            document.getElementById('utilidad').textContent = '$' + utilidad.toFixed(2);
+        }
+    } catch (error) {
+        console.log('Error compras:', error);
+    }
+}
+
+async function cargarFacturas(inicio, fin) {
+    try {
+        const response = await fetch('/api/facturas/lista', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_inicio: inicio, fecha_fin: fin})
+        });
+
+        const data = await response.json();
+        const tabla = document.getElementById('tablaFacturas');
+        tabla.innerHTML = '';
+
+        if (data.success && data.facturas.length > 0) {
+            data.facturas.forEach(f => {
+                const fila = `<tr>
+                    <td>${f.numero}</td>
+                    <td>${f.cliente || 'Sin cliente'}</td>
+                    <td>${new Date(f.fecha).toLocaleDateString()}</td>
+                    <td>$${f.total.toFixed(2)}</td>
+                </tr>`;
+                tabla.innerHTML += fila;
+            });
+        } else {
+            tabla.innerHTML = '<tr><td colspan="4">No hay facturas</td></tr>';
+        }
+    } catch (error) {
+        console.log('Error facturas:', error);
+    }
+}
+
+async function cargarComprasTabla(inicio, fin) {
+    try {
+        const response = await fetch('/api/compras/lista', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_inicio: inicio, fecha_fin: fin})
+        });
+
+        const data = await response.json();
+        const tabla = document.getElementById('tablaCompras');
+        tabla.innerHTML = '';
+
+        if (data.success && data.compras.length > 0) {
+            data.compras.forEach(c => {
+                const fila = `<tr>
+                    <td>${c.numero || c.id}</td>
+                    <td>${c.proveedor || 'Sin proveedor'}</td>
+                    <td>${new Date(c.fecha).toLocaleDateString()}</td>
+                    <td>$${c.total.toFixed(2)}</td>
+                </tr>`;
+                tabla.innerHTML += fila;
+            });
+        } else {
+            tabla.innerHTML = '<tr><td colspan="4">No hay compras</td></tr>';
+        }
+    } catch (error) {
+        console.log('Error compras tabla:', error);
+    }
+}
+
+/* ====== FUNCIONES FALTANTES ====== */
+function setHoy() {
+    const hoy = new Date().toISOString().split("T")[0];
+    document.getElementById('fechaInicio').value = hoy;
+    document.getElementById('fechaFin').value = hoy;
+    buscar();
+}
+
+function setSemana() {
+    const hoy = new Date();
+    const inicio = new Date(hoy);
+    inicio.setDate(hoy.getDate() - 7);
+
+    document.getElementById('fechaInicio').value = inicio.toISOString().split("T")[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split("T")[0];
+    buscar();
+}
+
+function setMes() {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+    document.getElementById('fechaInicio').value = inicio.toISOString().split("T")[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split("T")[0];
+    buscar();
+}
+
+function exportarDatos() {
+    alert("🚧 Exportar aún no está implementado");
+}
+
+function actualizarDatos() {
+    buscar();
+}
+
+function cargarDatos() {
+    buscar();
+}
+</script>
+{% endblock %}

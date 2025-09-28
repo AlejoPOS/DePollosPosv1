@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h2>Factura #{{ factura.numero }}</h2>
+    <p><b>Cliente:</b> {{ tercero.nombres }} {{ tercero.apellidos }}</p>
+    <p><b>Fecha:</b> {{ factura.fecha }}</p>
+    <p><b>Total:</b> {{ factura.total }}</p>
+
+    <h4>Detalle</h4>
+    <table class="table table-bordered">
+        <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Total</th></tr></thead>
+        <tbody>
+        {% for d in detalle %}
+            <tr>
+                <td>{{ d.producto }}</td>
+                <td>{{ d.cantidad }}</td>
+                <td>{{ d.precio }}</td>
+                <td>{{ d.total }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('crear_nota_credito', factura_id=factura.id) }}" class="btn btn-warning">
+        Crear Nota Crédito
+    </a>
+    <a href="{{ url_for('facturas') }}" class="btn btn-secondary">Volver</a>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="menu-container">
+    <h2>🐔 Bienvenido {{ user }}</h2>
+    <div class="d-grid gap-2">
+        <a href="{{ url_for('compras') }}" class="btn btn-custom text-white">📦 Compras</a>
+        <a href="{{ url_for('facturacion') }}" class="btn btn-custom text-white">🧾 Facturación</a>
+        <a href="{{ url_for('gastos') }}" class="btn btn-custom text-white">💸 Gastos</a>
+        <a href="{{ url_for('resumenes') }}" class="btn btn-custom text-white">📊 Resumen</a>
+        <a href="{{ url_for('inventario') }}" class="btn btn-custom text-white">📋 Inventario</a>
+    </div>
+    <hr>
+    <div class="text-center">
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">Cerrar sesión</a>
+    </div>
+</div>
+{% endblock %}

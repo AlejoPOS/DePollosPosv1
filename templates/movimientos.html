@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>📊 Movimientos Contables</h2>
+        <p class="text-muted mb-0">Consulta de asientos y movimientos contables</p>
+    </div>
+</div>
+
+<div class="card mb-4 p-3">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label>Fecha Inicio</label>
+            <input type="date" id="fechaInicio" class="form-control" value="{{ fecha_inicio }}">
+        </div>
+        <div class="col-md-3">
+            <label>Fecha Fin</label>
+            <input type="date" id="fechaFin" class="form-control" value="{{ fecha_fin }}">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary w-100" onclick="cargarMovimientos()">🔍 Consultar</button>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
+            <button class="btn btn-outline-secondary" onclick="setHoy()">Hoy</button>
+            <button class="btn btn-outline-secondary" onclick="setSemana()">Semana</button>
+            <button class="btn btn-outline-secondary" onclick="setMes()">Mes</button>
+        </div>
+    </div>
+</div>
+
+<div id="resultados" style="display:none;">
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center bg-success text-white">
+                <div class="card-body">
+                    <h4 id="totalDebitos">$0.00</h4>
+                    <p>Total Débitos</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center bg-danger text-white">
+                <div class="card-body">
+                    <h4 id="totalCreditos">$0.00</h4>
+                    <p>Total Créditos</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center bg-info text-white">
+                <div class="card-body">
+                    <h4 id="diferencia">$0.00</h4>
+                    <p>Diferencia</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5>Libro Diario</h5>
+            <div>
+                <button class="btn btn-sm btn-outline-primary" onclick="exportarMovimientos()">📤 Exportar</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="imprimirMovimientos()">🖨️ Imprimir</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover" id="tabla-movimientos">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Código</th>
+                            <th>Cuenta</th>
+                            <th>Descripción</th>
+                            <th class="text-end">Débito</th>
+                            <th class="text-end">Crédito</th>
+                            <th>Módulo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movimientos-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function cargarMovimientos() {
+    const inicio = document.getElementById('fechaInicio').value;
+    const fin = document.getElementById('fechaFin').value;
+
+    if (!inicio || !fin) {
+        alert('Selecciona ambas fechas');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/movimientos', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha_inicio: inicio, fecha_fin: fin})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            mostrarMovimientos(data.movimientos);
+            document.getElementById('resultados').style.display = 'block';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error de conexión: ' + error.message);
+    }
+}
+
+function mostrarMovimientos(movimientos) {
+    const tbody = document.getElementById('movimientos-tbody');
+    tbody.innerHTML = '';
+    
+    let totalDebitos = 0;
+    let totalCreditos = 0;
+
+    movimientos.forEach(mov => {
+        totalDebitos += mov.debito || 0;
+        totalCreditos += mov.credito || 0;
+
+        const fila = `<tr>
+            <td>${new Date(mov.fecha).toLocaleDateString()}</td>
+            <td>${mov.codigo}</td>
+            <td>${mov.nombre}</td>
+            <td>${mov.descripcion || ''}</td>
+            <td class="text-end">${mov.debito > 0 ? '$' + mov.debito.toFixed(2) : ''}</td>
+            <td class="text-end">${mov.credito > 0 ? '$' + mov.credito.toFixed(2) : ''}</td>
+            <td>
+                <span class="badge ${mov.modulo === 'ventas' ? 'bg-success' : mov.modulo === 'compras' ? 'bg-primary' : 'bg-secondary'}">
+                    ${mov.modulo || 'Manual'}
+                </span>
+            </td>
+        </tr>`;
+        tbody.innerHTML += fila;
+    });
+
+    // Actualizar totales
+    document.getElementById('totalDebitos').textContent = '$' + totalDebitos.toFixed(2);
+    document.getElementById('totalCreditos').textContent = '$' + totalCreditos.toFixed(2);
+    document.getElementById('diferencia').textContent = '$' + (totalDebitos - totalCreditos).toFixed(2);
+}
+
+function setHoy() {
+    const hoy = new Date().toISOString().split("T")[0];
+    document.getElementById('fechaInicio').value = hoy;
+    document.getElementById('fechaFin').value = hoy;
+    cargarMovimientos();
+}
+
+function setSemana() {
+    const hoy = new Date();
+    const inicio = new Date(hoy);
+    inicio.setDate(hoy.getDate() - 7);
+
+    document.getElementById('fechaInicio').value = inicio.toISOString().split("T")[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split("T")[0];
+    cargarMovimientos();
+}
+
+function setMes() {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+    document.getElementById('fechaInicio').value = inicio.toISOString().split("T")[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split("T")[0];
+    cargarMovimientos();
+}
+
+function exportarMovimientos() {
+    alert("🚧 Función de exportar en desarrollo");
+}
+
+function imprimirMovimientos() {
+    window.print();
+}
+</script>
+{% endblock %}

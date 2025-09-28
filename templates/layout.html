@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>De Pollos POS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #fff8f0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 220px;
+            height: 100%;
+            background: #b30000;
+            padding: 1rem 0;
+            color: white;
+        }
+        .sidebar h3 {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-weight: bold;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px;
+            padding: 10px;
+            background: #ffcc00;
+            border-radius: 8px;
+            color: black;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background: #ffaa00;
+        }
+        .content {
+            margin-left: 240px;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h3>🐔 De Pollos POS</h3>
+        <a href="{{ url_for('facturacion') }}">🧾 Facturación</a>
+        <a href="{{ url_for('inventario') }}">📦 Inventario</a>
+        <a href="{{ url_for('compras') }}">📥 Compras</a>
+        <a href="{{ url_for('gastos') }}">💸 Gastos</a>
+        <a href="{{ url_for('resumenes') }}">📊 Resumen</a>
+        <a href="{{ url_for('logout') }}">🔒 Salir</a>
+    </div>
+
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

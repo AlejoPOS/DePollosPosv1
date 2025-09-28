@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">🔄 Transformaciones de Inventario</h2>
+
+    <!-- Formulario -->
+    <div class="card p-3 mb-4">
+        <h5>Nueva Transformación</h5>
+        <div class="row g-2 mb-2">
+            <div class="col-md-3">
+                <label>Fecha</label>
+                <input id="trans_fecha" type="date" class="form-control" value="{{ fecha_hoy }}">
+            </div>
+            <div class="col-md-9">
+                <label>Descripción</label>
+                <input id="trans_descripcion" type="text" class="form-control" placeholder="Ej: Despresar 5 pollos">
+            </div>
+        </div>
+
+        <!-- Producto origen -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <label>Producto Origen (Salida)</label>
+                <select id="prod_salida" class="form-select">
+                    <option value="">-- Seleccione --</option>
+                    {% for p in productos %}
+                        <option value="{{ p.id }}">{{ p.nombre }} (Stock: {{ p.stock }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label>Cantidad</label>
+                <input id="cant_salida" type="number" min="0" class="form-control">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-danger w-100" onclick="agregarSalida()">➖ Registrar Salida</button>
+            </div>
+        </div>
+
+        <!-- Productos destino -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <label>Producto Destino (Entrada)</label>
+                <select id="prod_entrada" class="form-select">
+                    <option value="">-- Seleccione --</option>
+                    {% for p in productos %}
+                        <option value="{{ p.id }}">{{ p.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label>Cantidad</label>
+                <input id="cant_entrada" type="number" min="0" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label>Costo Unitario</label>
+                <input id="costo_entrada" type="number" min="0" step="0.01" class="form-control">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-success w-100" onclick="agregarEntrada()">➕ Registrar Entrada</button>
+            </div>
+        </div>
+
+        <!-- Listas -->
+        <div class="row">
+            <div class="col-md-6">
+                <h6>📤 Salidas</h6>
+                <ul id="lista-salidas" class="list-group"></ul>
+            </div>
+            <div class="col-md-6">
+                <h6>📥 Entradas</h6>
+                <ul id="lista-entradas" class="list-group"></ul>
+            </div>
+        </div>
+
+        <div class="mt-3 text-end">
+            <button class="btn btn-primary" onclick="guardarTransformacion()">💾 Guardar Transformación</button>
+        </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="card p-3">
+        <h5>Historial de Transformaciones</h5>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Número</th>
+                    <th>Fecha</th>
+                    <th>Descripción</th>
+                    <th>Total Salida</th>
+                    <th>Total Entrada</th>
+                    <th>Usuario</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in transformaciones %}
+                <tr>
+                    <td>{{ t.numero }}</td>
+                    <td>{{ t.fecha }}</td>
+                    <td>{{ t.descripcion }}</td>
+                    <td>${{ "%.2f"|format(t.total_salida) }}</td>
+                    <td>${{ "%.2f"|format(t.total_entrada) }}</td>
+                    <td>{{ t.creado_por }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let salidas = [];
+let entradas = [];
+
+function agregarSalida() {
+    const pid = document.getElementById("prod_salida").value;
+    const text = document.getElementById("prod_salida").selectedOptions[0]?.text;
+    const cant = parseFloat(document.getElementById("cant_salida").value) || 0;
+    if (!pid || cant <= 0) return alert("Seleccione producto y cantidad válida");
+
+    salidas.push({producto_id: pid, cantidad: cant});
+    const li = document.createElement("li");
+    li.className = "list-group-item";
+    li.textContent = `${text} - ${cant}`;
+    document.getElementById("lista-salidas").appendChild(li);
+}
+
+function agregarEntrada() {
+    const pid = document.getElementById("prod_entrada").value;
+    const text = document.getElementById("prod_entrada").selectedOptions[0]?.text;
+    const cant = parseFloat(document.getElementById("cant_entrada").value) || 0;
+    const costo = parseFloat(document.getElementById("costo_entrada").value) || 0;
+    if (!pid || cant <= 0 || costo <= 0) return alert("Datos inválidos");
+
+    entradas.push({producto_id: pid, cantidad: cant, costo: costo});
+    const li = document.createElement("li");
+    li.className = "list-group-item";
+    li.textContent = `${text} - ${cant} x $${costo.toFixed(2)}`;
+    document.getElementById("lista-entradas").appendChild(li);
+}
+
+async function guardarTransformacion() {
+    const payload = {
+        fecha: document.getElementById("trans_fecha").value,
+        descripcion: document.getElementById("trans_descripcion").value,
+        salidas: salidas,
+        entradas: entradas
+    };
+
+    try {
+        const res = await fetch("{{ url_for('save_transformacion') }}", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(data.mensaje);
+            location.reload();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (err) {
+        alert("Error conexión: " + err.message);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>📋 Plan Único de Cuentas (PUC)</h2>
+        <p class="text-muted mb-0">Catálogo de cuentas contables</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-warning" onclick="inicializarPUC()">🔄 Inicializar PUC Básico</button>
+        <button class="btn btn-success" onclick="toggleFormCuenta()">➕ Nueva Cuenta</button>
+    </div>
+</div>
+
+<div id="form-nueva-cuenta" class="card mb-4 p-3" style="display:none;">
+    <h5 class="card-title">Agregar Nueva Cuenta</h5>
+    <div class="row g-2">
+        <div class="col-md-2">
+            <input id="cuenta_codigo" class="form-control" placeholder="Código" maxlength="4" required>
+        </div>
+        <div class="col-md-6">
+            <input id="cuenta_nombre" class="form-control" placeholder="Nombre de la cuenta" required>
+        </div>
+        <div class="col-md-2">
+            <select id="cuenta_tipo" class="form-select" required>
+                <option value="">Seleccionar tipo</option>
+                <option value="activo">Activo</option>
+                <option value="pasivo">Pasivo</option>
+                <option value="patrimonio">Patrimonio</option>
+                <option value="ingreso">Ingreso</option>
+                <option value="gasto">Gasto</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-flex">
+            <button type="button" class="btn btn-primary w-100" onclick="guardarCuenta()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4 p-3">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <input type="text" id="buscar-cuenta" class="form-control" placeholder="🔍 Buscar cuenta...">
+        </div>
+        <div class="col-md-3">
+            <select id="filtro-tipo" class="form-select">
+                <option value="">Todos los tipos</option>
+                <option value="activo">Activos</option>
+                <option value="pasivo">Pasivos</option>
+                <option value="patrimonio">Patrimonio</option>
+                <option value="ingreso">Ingresos</option>
+                <option value="gasto">Gastos</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-outline-secondary w-100" onclick="limpiarFiltrosPUC()">🗑️ Limpiar</button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tabla-puc">
+            <thead class="table-dark">
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre de la Cuenta</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cuenta in cuentas %}
+                <tr>
+                    <td><strong>{{ cuenta.codigo }}</strong></td>
+                    <td>{{ cuenta.nombre }}</td>
+                    <td>
+                        <span class="badge 
+                            {% if cuenta.tipo == 'activo' %}bg-primary
+                            {% elif cuenta.tipo == 'pasivo' %}bg-danger
+                            {% elif cuenta.tipo == 'patrimonio' %}bg-success
+                            {% elif cuenta.tipo == 'ingreso' %}bg-info
+                            {% elif cuenta.tipo == 'gasto' %}bg-warning
+                            {% endif %}">
+                            {{ cuenta.tipo|title }}
+                        </span>
+                    </td>
+                    <td><span class="badge bg-success">Activa</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3 text-muted">
+    <small>Total de cuentas: <span id="total-cuentas">{{ cuentas|length }}</span></small>
+</div>
+
+<script>
+function toggleFormCuenta() {
+    const form = document.getElementById("form-nueva-cuenta");
+    form.style.display = (form.style.display === 'none') ? 'block' : 'none';
+}
+
+async function guardarCuenta() {
+    const codigo = document.getElementById("cuenta_codigo").value.trim();
+    const nombre = document.getElementById("cuenta_nombre").value.trim();
+    const tipo = document.getElementById("cuenta_tipo").value;
+
+    if (!codigo || !nombre || !tipo) {
+        alert('Todos los campos son obligatorios.');
+        return;
+    }
+
+    const payload = { codigo, nombre, tipo };
+
+    try {
+        const res = await fetch("/api/puc/add", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(data.mensaje);
+            document.getElementById("form-nueva-cuenta").style.display = 'none';
+            document.getElementById("form-nueva-cuenta").querySelectorAll("input, select").forEach(i => i.value = '');
+            location.reload();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (err) {
+        alert("Error de conexión: " + err.message);
+    }
+}
+
+async function inicializarPUC() {
+    if (!confirm('¿Deseas inicializar el PUC con cuentas básicas? Esto no afectará las cuentas existentes.')) {
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/puc/seed", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(data.mensaje);
+            location.reload();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (err) {
+        alert("Error de conexión: " + err.message);
+    }
+}
+
+// Filtros
+document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('buscar-cuenta').addEventListener('input', filtrarTablaPUC);
+    document.getElementById('filtro-tipo').addEventListener('change', filtrarTablaPUC);
+});
+
+function filtrarTablaPUC(){
+    const buscar = document.getElementById('buscar-cuenta').value.toLowerCase();
+    const filtroTipo = document.getElementById('filtro-tipo').value;
+    const filas = document.querySelectorAll('#tabla-puc tbody tr');
+    let visibles = 0;
+    
+    filas.forEach(fila => {
+        const codigo = fila.cells[0].textContent.toLowerCase();
+        const nombre = fila.cells[1].textContent.toLowerCase();
+        const tipo = fila.querySelector('.badge').textContent.toLowerCase();
+        
+        let mostrar = true;
+        
+        if (buscar && !codigo.includes(buscar) && !nombre.includes(buscar)) {
+            mostrar = false;
+        }
+        
+        if (filtroTipo && !tipo.includes(filtroTipo)) {
+            mostrar = false;
+        }
+        
+        fila.style.display = mostrar ? '' : 'none';
+        if (mostrar) visibles++;
+    });
+    
+    document.getElementById('total-cuentas').textContent = visibles;
+}
+
+function limpiarFiltrosPUC(){
+    document.getElementById('buscar-cuenta').value = '';
+    document.getElementById('filtro-tipo').value = '';
+    filtrarTablaPUC();
+}
+</script>
+{% endblock %}
