@@ -1,23 +1,85 @@
 # app.py
 from flask import Flask, render_template, redirect, url_for, request, session, jsonify
 import os
+import re
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
-from collections import defaultdict
-from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__)
-app.secret_key = "clave_secreta_super_segura"
+# ----------------------------------------------------------------------
+#  Conexión Postgres + compatibilidad placeholders SQLite -> PostgreSQL
+# ----------------------------------------------------------------------
+
+def _replace_placeholders(sql: str) -> str:
+    """
+    Reemplaza cada '?' por '%s' solo si está fuera de comillas
+    simples o dobles, para que psycopg2 acepte la consulta.
+    """
+    out = []
+    in_sq = False  # dentro de comilla simple
+    in_dq = False  # dentro de comilla doble
+    i = 0
+    while i < len(sql):
+        c = sql[i]
+        if c == "'" and not in_dq:
+            in_sq = not in_sq
+            out.append(c)
+            i += 1
+            continue
+        if c == '"' and not in_sq:
+            in_dq = not in_dq
+            out.append(c)
+            i += 1
+            continue
+        if c == '?' and not in_sq and not in_dq:
+            out.append('%s')
+            i += 1
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+class CompatCursor:
+    """
+    Cursor compatible: reemplaza '?' por '%s' antes de ejecutar.
+    """
+    def __init__(self, real_cursor):
+        self._cur = real_cursor
+
+    def execute(self, query, params=None):
+        if isinstance(query, str):
+            query = _replace_placeholders(query)
+        return self._cur.execute(query, params)
+
+    def executemany(self, query, seq_of_params):
+        if isinstance(query, str):
+            query = _replace_placeholders(query)
+        return self._cur.executemany(query, seq_of_params)
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
 
 def get_db_connection():
-    # Lee la URL que Render te da en Environment como DATABASE_URL
+    """
+    Devuelve una conexión a Postgres.
+    Sobrescribe conn.cursor() para que retorne CompatCursor.
+    """
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL no está definida en las variables de entorno")
+
     conn = psycopg2.connect(
-        os.environ["DATABASE_URL"],
+        dsn,
         sslmode="require",
-        cursor_factory=RealDictCursor   # Devuelve dicts en vez de tuplas
+        cursor_factory=RealDictCursor
     )
+
+    real_cursor = conn.cursor
+    def wrapped_cursor(*args, **kwargs):
+        return CompatCursor(real_cursor(*args, **kwargs))
+    conn.cursor = wrapped_cursor
     return conn
+
 
 # =========================
 # FUNCIONES AUXILIARES CONTABILIDAD
