@@ -1,8 +1,7 @@
 # app.py
-from flask import Flask, render_template, redirect, url_for, request, session, jsonify
+from flask import Flask, render_template, redirect, url_for, request, session, jsonify, flash
 import os
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash, session
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -79,6 +78,12 @@ def get_db_connection():
         return CompatCursor(real_cursor(*args, **kwargs))
     conn.cursor = wrapped_cursor
     return conn
+
+# ----------------------------------------------------------------------
+#  AQUÍ SE CREA LA APLICACIÓN FLASK  (¡IMPORTANTE!)
+# ----------------------------------------------------------------------
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "clave_secreta_por_defecto")
 
 
 # =========================
