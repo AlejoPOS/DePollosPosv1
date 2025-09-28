@@ -58,25 +58,36 @@ class CompatCursor:
     def __getattr__(self, name):
         return getattr(self._cur, name)
 
+class CompatConnection:
+    """
+    Conexión que devuelve un CompatCursor en lugar del cursor normal.
+    Delega el resto de atributos a la conexión real.
+    """
+    def __init__(self, real_conn):
+        self._conn = real_conn
+
+    def cursor(self, *args, **kwargs):
+        real_cursor = self._conn.cursor(*args, **kwargs)
+        return CompatCursor(real_cursor)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
 def get_db_connection():
     """
-    Devuelve una conexión a Postgres.
-    Sobrescribe conn.cursor() para que retorne CompatCursor.
+    Devuelve una conexión a Postgres que al llamar .cursor()
+    entrega un CompatCursor (para reemplazar '?' por '%s').
     """
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL no está definida en las variables de entorno")
 
-    conn = psycopg2.connect(
+    real_conn = psycopg2.connect(
         dsn,
         sslmode="require",
         cursor_factory=RealDictCursor
     )
-
-    real_cursor = conn.cursor
-    def wrapped_cursor(*args, **kwargs):
-        return CompatCursor(real_cursor(*args, **kwargs))
-    conn.cursor = wrapped_cursor
+    return CompatConnection(real_conn)
     return conn
 
 # ----------------------------------------------------------------------
