@@ -1,6 +1,8 @@
 # app.py
 from flask import Flask, render_template, redirect, url_for, request, session, jsonify
-import sqlite3
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from collections import defaultdict
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,12 +10,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.secret_key = "clave_secreta_super_segura"
 
-DB_FILE = "pos.db"
-
-# ===== CONEXIÓN DB =====
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    # Lee la URL que Render te da en Environment como DATABASE_URL
+    conn = psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require",
+        cursor_factory=RealDictCursor   # Devuelve dicts en vez de tuplas
+    )
     return conn
 
 # =========================
