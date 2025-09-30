@@ -1,7 +1,7 @@
 import os
 import re
 import psycopg2
-import sqlite3  # ✅ Para manejar excepciones sqlite3.IntegrityError
+from psycopg2 import errors as pg_errors  # ✅ Para manejar errores de PostgreSQL
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request, session, jsonify, flash
 from psycopg2.extras import RealDictCursor
@@ -80,10 +80,10 @@ class CompatConnection:
         return getattr(self._conn, name)
 
 def get_db_connection():
+    """✅ Función única de conexión con todas las compatibilidades"""
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL no está definida en las variables de entorno")
-
 
     real_conn = psycopg2.connect(
         dsn,
@@ -99,38 +99,32 @@ def get_db_connection():
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "clave_secreta_por_defecto")
 
-
-# ===== CONEXIÓN DB =====
-def get_db_connection():
-    dsn = os.environ.get("DATABASE_URL")
-    if not dsn:
-        raise RuntimeError("DATABASE_URL no está definida en las variables de entorno")
-
-    real_conn = psycopg2.connect(
-        dsn,
-        sslmode="require",
-        cursor_factory=RealDictCursor
-    )
-    return CompatConnection(real_conn)
-
 # =========================
 # FUNCIONES AUXILIARES CONTABILIDAD
 # =========================
 def crear_asiento_venta(factura_id):
+    """✅ Corregido: manejo adecuado del cursor"""
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        factura = cur.execute(
-            "SELECT numero, fecha, total FROM facturas WHERE id = %s", (factura_id,)
-        ).fetchone()
+        
+        cur.execute("SELECT numero, fecha, total FROM facturas WHERE id = %s", (factura_id,))
+        factura = cur.fetchone()
+        
         if not factura:
-            conn.close()
             return
+            
         fecha = factura["fecha"]
         total = factura["total"]
         descripcion = f"Venta factura #{factura['numero']}"
-        caja = cur.execute("SELECT id FROM puc WHERE codigo = '1105'").fetchone()
-        ventas = cur.execute("SELECT id FROM puc WHERE codigo = '4135'").fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+        caja = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '4135'")
+        ventas = cur.fetchone()
+        
         if caja and ventas:
             cur.execute(
                 """INSERT INTO movimientos_contables
@@ -146,30 +140,44 @@ def crear_asiento_venta(factura_id):
             )
         conn.commit()
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error creando asiento de venta:", e)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def crear_asiento_compra(compra_id):
+    """✅ Corregido: manejo adecuado del cursor"""
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        compra = cur.execute(
+        
+        cur.execute(
             "SELECT numero, fecha, total, forma_pago FROM compras WHERE id = %s",
-            (compra_id,),
-        ).fetchone()
+            (compra_id,)
+        )
+        compra = cur.fetchone()
+        
         if not compra:
-            conn.close()
             return
+            
         fecha = compra["fecha"]
         total = compra["total"]
         descripcion = f"Compra #{compra['numero']}"
-        inventario = cur.execute("SELECT id FROM puc WHERE codigo = '1435'").fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1435'")
+        inventario = cur.fetchone()
+        
         if compra["forma_pago"] == "contado":
-            pago = cur.execute("SELECT id FROM puc WHERE codigo = '1105'").fetchone()
+            cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+            pago = cur.fetchone()
         else:
-            pago = cur.execute("SELECT id FROM puc WHERE codigo = '2205'").fetchone()
+            cur.execute("SELECT id FROM puc WHERE codigo = '2205'")
+            pago = cur.fetchone()
+            
         if inventario and pago:
             cur.execute(
                 """INSERT INTO movimientos_contables
@@ -185,25 +193,38 @@ def crear_asiento_compra(compra_id):
             )
         conn.commit()
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error creando asiento de compra:", e)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def crear_asiento_recibo(recibo_id):
+    """✅ Corregido: manejo adecuado del cursor"""
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        recibo = cur.execute(
+        
+        cur.execute(
             "SELECT numero, fecha, valor, concepto FROM recibos_caja WHERE id = %s",
-            (recibo_id,),
-        ).fetchone()
+            (recibo_id,)
+        )
+        recibo = cur.fetchone()
+        
         if not recibo:
-            conn.close()
             return
+            
         descripcion = f"Recibo de Caja #{recibo['numero']} - {recibo['concepto'] or ''}"
-        caja = cur.execute("SELECT id FROM puc WHERE codigo = '1105'").fetchone()
-        ingreso = cur.execute("SELECT id FROM puc WHERE codigo = '4199'").fetchone()  # Otros ingresos
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+        caja = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '4199'")
+        ingreso = cur.fetchone()
+        
         if caja and ingreso:
             cur.execute(
                 """INSERT INTO movimientos_contables
@@ -219,25 +240,38 @@ def crear_asiento_recibo(recibo_id):
             )
         conn.commit()
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error asiento recibo:", e)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def crear_asiento_egreso(egreso_id):
+    """✅ Corregido: manejo adecuado del cursor"""
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        egreso = cur.execute(
+        
+        cur.execute(
             "SELECT numero, fecha, valor, concepto FROM comprobantes_egreso WHERE id = %s",
-            (egreso_id,),
-        ).fetchone()
+            (egreso_id,)
+        )
+        egreso = cur.fetchone()
+        
         if not egreso:
-            conn.close()
             return
+            
         descripcion = f"Comprobante Egreso #{egreso['numero']} - {egreso['concepto'] or ''}"
-        caja = cur.execute("SELECT id FROM puc WHERE codigo = '1105'").fetchone()
-        gasto = cur.execute("SELECT id FROM puc WHERE codigo = '5195'").fetchone()  # Gastos varios
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+        caja = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '5195'")
+        gasto = cur.fetchone()
+        
         if caja and gasto:
             cur.execute(
                 """INSERT INTO movimientos_contables
@@ -253,36 +287,47 @@ def crear_asiento_egreso(egreso_id):
             )
         conn.commit()
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error asiento egreso:", e)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def crear_asiento_nota_credito(nota_id):
+    """✅ Corregido: manejo adecuado del cursor"""
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        nota = cur.execute(
+        
+        cur.execute(
             "SELECT numero, fecha, total FROM notas_credito WHERE id = %s",
-            (nota_id,),
-        ).fetchone()
+            (nota_id,)
+        )
+        nota = cur.fetchone()
+        
         if not nota:
-            conn.close()
             return
+            
         fecha = nota["fecha"]
         total = nota["total"]
         descripcion = f"Nota Crédito #{nota['numero']}"
-        ventas = cur.execute("SELECT id FROM puc WHERE codigo = '4135'").fetchone()  # Ventas
-        devoluciones = cur.execute("SELECT id FROM puc WHERE codigo = '4175'").fetchone()  # Devoluciones en ventas
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '4135'")
+        ventas = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '4175'")
+        devoluciones = cur.fetchone()
+        
         if ventas and devoluciones:
-            # Disminuye ventas
             cur.execute(
                 """INSERT INTO movimientos_contables
                    (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
                    VALUES (%s, %s, %s, %s, 0, 'notas_credito', %s)""",
                 (fecha, ventas["id"], descripcion, total, nota_id),
             )
-            # Reconoce devolución
             cur.execute(
                 """INSERT INTO movimientos_contables
                    (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
@@ -291,9 +336,12 @@ def crear_asiento_nota_credito(nota_id):
             )
         conn.commit()
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error asiento nota crédito:", e)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 # =========================
 # LOGIN
@@ -307,29 +355,33 @@ def login():
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            user = cur.execute(
+            cur.execute(
                 "SELECT id, usuario, clave, rol, activo FROM usuarios WHERE usuario = %s",
-                (usuario,),
-            ).fetchone()
+                (usuario,)
+            )
+            user = cur.fetchone()
             conn.close()
-        except Exception:
+        except Exception as e:
+            print(f"Error en login: {e}")
             user = None
 
         if user:
             try:
-                if user["activo"] == 1 and check_password_hash(user["clave"], clave):
+                if user["activo"] and check_password_hash(user["clave"], clave):
                     session["user"] = user["usuario"]
                     session["rol"] = user["rol"]
                     return redirect(url_for("facturacion"))
                 else:
                     return render_template("login.html", error="Usuario o clave incorrectos")
             except Exception:
-                if user["activo"] == 1 and user["clave"] == clave:
+                # Si falla check_password_hash, probar comparación directa (para claves legacy)
+                if user["activo"] and user["clave"] == clave:
                     session["user"] = user["usuario"]
                     session["rol"] = user["rol"]
                     return redirect(url_for("facturacion"))
                 return render_template("login.html", error="Usuario o clave incorrectos")
 
+        # Usuario admin por defecto (solo para desarrollo)
         if usuario == "admin" and clave == "1234":
             session["user"] = "admin"
             session["rol"] = "admin"
@@ -357,30 +409,32 @@ def facturacion():
     cur = conn.cursor()
 
     try:
-        # Clientes
-        clientes = cur.execute("""
+        cur.execute("""
             SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre 
             FROM terceros 
             WHERE tipo='Cliente'
-        """).fetchall()
-    except Exception:
+        """)
+        clientes = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando clientes: {e}")
         clientes = []
 
     try:
-        # Productos
-        productos = cur.execute("""
+        cur.execute("""
             SELECT id, nombre, precio, stock 
             FROM productos
-        """).fetchall()
-    except Exception:
+        """)
+        productos = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando productos: {e}")
         productos = []
 
     try:
-        # Último número de factura
         cur.execute("SELECT MAX(numero) as last_num FROM facturas")
         row = cur.fetchone()
         last_num = row["last_num"] if row and row["last_num"] else 0
-    except Exception:
+    except Exception as e:
+        print(f"Error obteniendo último número: {e}")
         last_num = 0
 
     conn.close()
@@ -390,7 +444,7 @@ def facturacion():
         user=session["user"],
         clientes=clientes,
         productos=productos,
-        factura_num=last_num + 1,  # Siguiente consecutivo
+        factura_num=last_num + 1,
         fecha=datetime.now().strftime("%Y-%m-%d")
     )
 
@@ -400,11 +454,12 @@ def facturacion_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
 
+    conn = None
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
         fecha = data.get("fecha")
-        numero = data.get("numero")  # viene del frontend
+        numero = data.get("numero")
         lines = data.get("lines", [])
 
         total = sum(float(l["total"]) for l in lines)
@@ -424,7 +479,9 @@ def facturacion_save():
             VALUES (%s, %s, %s, %s)
             RETURNING id
         """, (cliente_id, numero, fecha, total))
-        factura_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        factura_id = result["id"]
 
         if not factura_id:
             raise Exception("No se pudo obtener el ID de la factura")
@@ -444,13 +501,20 @@ def facturacion_save():
             """, (l["cantidad"], l["producto_id"]))
 
         conn.commit()
-        conn.close()
-
+        
+        # Crear asiento contable
+        crear_asiento_venta(factura_id)
+        
         return jsonify({"success": True, "factura_num": numero})
 
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error en facturacion_save:", e)
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # FACTURAS Y NOTAS DE CRÉDITO
 # =========================
@@ -463,14 +527,16 @@ def facturas():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        facturas = cur.execute("""
+        cur.execute("""
             SELECT f.id, f.numero, f.fecha, f.total, 
                    t.nombres || ' ' || COALESCE(t.apellidos,'') AS cliente
             FROM facturas f 
             LEFT JOIN terceros t ON f.tercero_id = t.id
             ORDER BY f.fecha DESC, f.numero DESC
-        """).fetchall()
-    except Exception:
+        """)
+        facturas = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando facturas: {e}")
         facturas = []
     conn.close()
     
@@ -487,40 +553,45 @@ def ver_factura(factura_id):
     cur = conn.cursor()
     try:
         # Obtener factura
-        factura = cur.execute("""
+        cur.execute("""
             SELECT f.*, t.nombres, t.apellidos, t.telefono, t.direccion
             FROM facturas f 
             LEFT JOIN terceros t ON f.tercero_id = t.id 
             WHERE f.id = %s
-        """, (factura_id,)).fetchone()
+        """, (factura_id,))
+        factura = cur.fetchone()
         
         if not factura:
             conn.close()
             return redirect(url_for("facturas"))
         
         # Obtener tercero
-        tercero = cur.execute("""
+        cur.execute("""
             SELECT nombres, apellidos, telefono, direccion
             FROM terceros WHERE id = %s
-        """, (factura["tercero_id"],)).fetchone()
+        """, (factura["tercero_id"],))
+        tercero = cur.fetchone()
         
         # Obtener detalle
-        detalle = cur.execute("""
+        cur.execute("""
             SELECT df.cantidad, df.precio, df.total, p.nombre AS producto
             FROM detalle_factura df 
             JOIN productos p ON df.producto_id = p.id
             WHERE df.factura_id = %s
-        """, (factura_id,)).fetchall()
+        """, (factura_id,))
+        detalle = cur.fetchall()
         
         # Obtener notas de crédito asociadas
-        notas_credito = cur.execute("""
+        cur.execute("""
             SELECT nc.numero, nc.fecha, nc.total, nc.motivo
             FROM notas_credito nc
             WHERE nc.factura_id = %s
             ORDER BY nc.fecha DESC
-        """, (factura_id,)).fetchall()
+        """, (factura_id,))
+        notas_credito = cur.fetchall()
         
-    except Exception:
+    except Exception as e:
+        print(f"Error en ver_factura: {e}")
         conn.close()
         return redirect(url_for("facturas"))
     
@@ -543,24 +614,26 @@ def crear_nota_credito(factura_id):
     cur = conn.cursor()
     try:
         # Obtener factura
-        factura = cur.execute("""
+        cur.execute("""
             SELECT f.*, t.nombres, t.apellidos
             FROM facturas f 
             LEFT JOIN terceros t ON f.tercero_id = t.id 
             WHERE f.id = %s
-        """, (factura_id,)).fetchone()
+        """, (factura_id,))
+        factura = cur.fetchone()
         
         if not factura:
             conn.close()
             return redirect(url_for("facturas"))
         
         # Obtener detalle de la factura
-        detalle = cur.execute("""
+        cur.execute("""
             SELECT df.producto_id, df.cantidad, df.precio, p.nombre AS descripcion
             FROM detalle_factura df 
             JOIN productos p ON df.producto_id = p.id
             WHERE df.factura_id = %s
-        """, (factura_id,)).fetchall()
+        """, (factura_id,))
+        detalle = cur.fetchall()
         
         # Obtener próximo número de nota de crédito
         cur.execute("SELECT MAX(numero) AS max_num FROM notas_credito")
@@ -568,7 +641,8 @@ def crear_nota_credito(factura_id):
         last_num = row["max_num"] if row and row["max_num"] else 0
         next_num = last_num + 1
         
-    except Exception:
+    except Exception as e:
+        print(f"Error en crear_nota_credito: {e}")
         conn.close()
         return redirect(url_for("facturas"))
     
@@ -586,6 +660,7 @@ def save_nota_credito():
     if "user" not in session:
         return redirect(url_for("login"))
     
+    conn = None
     try:
         factura_id = request.form.get("factura_id")
         numero = request.form.get("numero")
@@ -608,9 +683,8 @@ def save_nota_credito():
         cur = conn.cursor()
         
         # Obtener tercero de la factura
-        factura_info = cur.execute(
-            "SELECT tercero_id FROM facturas WHERE id = %s", (factura_id,)
-        ).fetchone()
+        cur.execute("SELECT tercero_id FROM facturas WHERE id = %s", (factura_id,))
+        factura_info = cur.fetchone()
         tercero_id = factura_info["tercero_id"] if factura_info else None
         
         # Insertar nota de crédito
@@ -619,7 +693,8 @@ def save_nota_credito():
             VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
         """, (factura_id, numero, fecha, tercero_id, motivo, total_nota, session["user"]))
         
-        nota_id = cur.fetchone()["id"]
+        result = cur.fetchone()
+        nota_id = result["id"]
         
         # Insertar detalle y devolver inventario
         for i in range(len(producto_ids)):
@@ -640,14 +715,20 @@ def save_nota_credito():
                 )
         
         conn.commit()
-        conn.close()
         
+        # Crear asiento contable
         crear_asiento_nota_credito(nota_id)
         
         return redirect(url_for("ver_factura", factura_id=factura_id))
         
-    except Exception:
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en save_nota_credito: {e}")
         return redirect(url_for("crear_nota_credito", factura_id=factura_id))
+    finally:
+        if conn:
+            conn.close()
 
 # =========================
 # COMPRAS
@@ -659,21 +740,26 @@ def compras():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        proveedores = cur.execute("""
+        cur.execute("""
             SELECT id, nombres || ' ' || COALESCE(apellidos,'') AS nombre
             FROM terceros WHERE tipo='Proveedor'
-        """).fetchall()
-    except Exception:
+        """)
+        proveedores = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando proveedores: {e}")
         proveedores = []
     try:
-        productos = cur.execute("SELECT id, nombre, stock, costo FROM productos").fetchall()
-    except Exception:
+        cur.execute("SELECT id, nombre, stock, costo FROM productos")
+        productos = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando productos: {e}")
         productos = []
     try:
         cur.execute("SELECT MAX(id) AS max_id FROM compras")
         row = cur.fetchone()
         last_num = row["max_id"] if row and row["max_id"] else 0
-    except Exception:
+    except Exception as e:
+        print(f"Error obteniendo último número: {e}")
         last_num = 0
     conn.close()
 
@@ -692,6 +778,7 @@ def compras_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
 
+    conn = None
     try:
         data = request.get_json()
         proveedor_id = data.get("proveedor_id")
@@ -710,7 +797,9 @@ def compras_save():
             INSERT INTO compras (tercero_id, numero, fecha, total, forma_pago, pagada)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
         """, (proveedor_id, numero, fecha, total, forma_pago, 1 if forma_pago == "contado" else 0))
-        compra_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        compra_id = result["id"]
 
         # Detalle y actualización de inventario
         for l in lines:
@@ -726,12 +815,19 @@ def compras_save():
             """, (l["cantidad"], l["costo"], l["producto_id"]))
 
         conn.commit()
-        conn.close()
-
+        
+        # Crear asiento contable
+        crear_asiento_compra(compra_id)
+        
         return jsonify({"success": True, "compra_num": numero})
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error en compras_save:", e)
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # =========================
 # INVENTARIO
@@ -743,10 +839,10 @@ def inventario():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        productos_raw = cur.execute(
-            "SELECT id, nombre, stock, costo, precio FROM productos"
-        ).fetchall()
-    except Exception:
+        cur.execute("SELECT id, nombre, stock, costo, precio FROM productos")
+        productos_raw = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando inventario: {e}")
         productos_raw = []
     conn.close()
 
@@ -767,25 +863,30 @@ def inventario():
 def add_producto():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         nombre = data.get("nombre", "").strip()
         stock = float(data.get("stock", 0))
         costo = float(data.get("costo", 0))
         precio = float(data.get("precio", 0))
+        
         if not nombre:
             return jsonify({"success": False, "error": "Nombre requerido"})
+        
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO productos (nombre, stock, costo, precio) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO productos (nombre, stock, costo, precio) VALUES (%s, %s, %s, %s) RETURNING id",
             (nombre, stock, costo, precio),
         )
+        
+        result = cur.fetchone()
+        nuevo_id = result["id"]
+        
         conn.commit()
-        # En PostgreSQL lastrowid no existe, usamos RETURNING
-        cur.execute("SELECT currval(pg_get_serial_sequence('productos','id')) AS id;")
-        nuevo_id = cur.fetchone()["id"]
-        conn.close()
+        
         return jsonify(
             {
                 "success": True,
@@ -794,21 +895,31 @@ def add_producto():
             }
         )
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en add_producto: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/update_producto/<int:producto_id>", methods=["PUT"])
 def update_producto(producto_id):
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         nombre = data.get("nombre", "").strip()
         stock = float(data.get("stock", 0))
         costo = float(data.get("costo", 0))
         precio = float(data.get("precio", 0))
+        
         if not nombre:
             return jsonify({"success": False, "error": "Nombre requerido"})
+        
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
@@ -816,25 +927,39 @@ def update_producto(producto_id):
             (nombre, stock, costo, precio, producto_id),
         )
         conn.commit()
-        conn.close()
+        
         return jsonify({"success": True, "mensaje": "Producto actualizado correctamente"})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en update_producto: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/delete_producto/<int:producto_id>", methods=["DELETE"])
 def delete_producto(producto_id):
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("DELETE FROM productos WHERE id=%s", (producto_id,))
         conn.commit()
-        conn.close()
+        
         return jsonify({"success": True, "mensaje": "Producto eliminado correctamente"})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en delete_producto: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 # =========================
@@ -844,12 +969,14 @@ def delete_producto(producto_id):
 def api_productos():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        prows = cur.execute(
+        cur.execute(
             "SELECT id, nombre, stock, costo, precio FROM productos ORDER BY nombre"
-        ).fetchall()
+        )
+        prows = cur.fetchall()
         productos = [dict(p) for p in prows]
     except Exception as e:
         print("Error en api_productos:", e)
@@ -869,14 +996,15 @@ def transformaciones():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        productos = [dict(p) for p in cur.execute(
-            "SELECT id, nombre, stock, costo, precio FROM productos ORDER BY nombre"
-        ).fetchall()]
-        transformaciones = [dict(t) for t in cur.execute("""
+        cur.execute("SELECT id, nombre, stock, costo, precio FROM productos ORDER BY nombre")
+        productos = [dict(p) for p in cur.fetchall()]
+        
+        cur.execute("""
             SELECT id, numero, fecha, descripcion, total_salida, total_entrada, creado_por
             FROM transformaciones
             ORDER BY fecha DESC, id DESC
-        """).fetchall()]
+        """)
+        transformaciones = [dict(t) for t in cur.fetchall()]
     except Exception as e:
         print("Error cargando transformaciones:", e)
         productos, transformaciones = [], []
@@ -895,6 +1023,7 @@ def save_transformacion():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
 
+    conn = None
     try:
         data = request.get_json() or {}
         fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
@@ -910,14 +1039,17 @@ def save_transformacion():
 
         # ✅ Consecutivo automático
         cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM transformaciones")
-        numero = cur.fetchone()["next_num"]
+        result = cur.fetchone()
+        numero = result["next_num"]
 
         # Insertar cabecera
         cur.execute("""
             INSERT INTO transformaciones (numero, fecha, descripcion, total_salida, total_entrada, creado_por)
             VALUES (%s, %s, %s, 0, 0, %s) RETURNING id
         """, (numero, fecha, descripcion, session["user"]))
-        trans_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        trans_id = result["id"]
 
         # Registrar salidas
         for s in salidas:
@@ -925,7 +1057,9 @@ def save_transformacion():
             cant = float(s.get("cantidad") or 0)
             if cant <= 0:
                 continue
-            prod = cur.execute("SELECT costo FROM productos WHERE id=%s", (pid,)).fetchone()
+            
+            cur.execute("SELECT costo FROM productos WHERE id=%s", (pid,))
+            prod = cur.fetchone()
             costo_unit = float(prod["costo"]) if prod else 0.0
             total = cant * costo_unit
             total_salida += total
@@ -934,6 +1068,7 @@ def save_transformacion():
                 INSERT INTO detalle_transformacion (transformacion_id, tipo, producto_id, cantidad, costo, total)
                 VALUES (%s, 'salida', %s, %s, %s, %s)
             """, (trans_id, pid, cant, costo_unit, total))
+            
             cur.execute("UPDATE productos SET stock = stock - %s WHERE id=%s", (cant, pid))
 
         # Registrar entradas
@@ -950,6 +1085,7 @@ def save_transformacion():
                 INSERT INTO detalle_transformacion (transformacion_id, tipo, producto_id, cantidad, costo, total)
                 VALUES (%s, 'entrada', %s, %s, %s, %s)
             """, (trans_id, pid, cant, costo_unit, total))
+            
             cur.execute("UPDATE productos SET stock = stock + %s, costo = %s WHERE id=%s", (cant, costo_unit, pid))
 
         # Actualizar totales
@@ -957,32 +1093,35 @@ def save_transformacion():
                     (total_salida, total_entrada, trans_id))
 
         conn.commit()
-        conn.close()
 
         # Asiento contable
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            inventario = cur.execute("SELECT id FROM puc WHERE codigo='1435'").fetchone()
+            cur.execute("SELECT id FROM puc WHERE codigo='1435'")
+            inventario = cur.fetchone()
             if inventario:
                 cur.execute("""
                     INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
                     VALUES (%s, %s, %s, %s, 0, 'transformacion', %s)
                 """, (fecha, inventario["id"], f"Transformación {numero}", total_entrada, trans_id))
+                
                 cur.execute("""
                     INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
                     VALUES (%s, %s, %s, 0, %s, 'transformacion', %s)
                 """, (fecha, inventario["id"], f"Transformación {numero}", total_salida, trans_id))
+                
                 conn.commit()
         except Exception as e:
             print("Error asiento transformación:", e)
-        finally:
-            conn.close()
 
         return jsonify({"success": True, "mensaje": f"Transformación #{numero} registrada"})
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error save_transformacion:", e)
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 # =========================
@@ -992,8 +1131,10 @@ def save_transformacion():
 def add_tercero():
     if "user" not in session:
         return redirect(url_for("login"))
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -1001,12 +1142,21 @@ def add_tercero():
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
         """, (data.get("nombres"), data.get("apellidos"), data.get("telefono"),
               data.get("correo"), data.get("direccion"), data.get("tipo")))
-        tercero_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        tercero_id = result["id"]
+        
         conn.commit()
-        conn.close()
+        
         return jsonify({"success": True, "id": tercero_id, "nombre": f"{data.get('nombres')} {data.get('apellidos')}"})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en add_tercero: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # =========================
 # GASTOS
@@ -1024,19 +1174,24 @@ def gastos():
 def recibo_caja():
     if "user" not in session:
         return redirect(url_for("login"))
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        terceros = cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') AS nombre FROM terceros").fetchall()
-    except Exception:
+        cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') AS nombre FROM terceros")
+        terceros = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando terceros: {e}")
         terceros = []
     try:
         cur.execute("SELECT MAX(numero) AS max_num FROM recibos_caja")
         row = cur.fetchone()
         last_num = row["max_num"] if row and row["max_num"] else 0
-    except Exception:
+    except Exception as e:
+        print(f"Error obteniendo último número: {e}")
         last_num = 0
     conn.close()
+    
     return render_template("recibo_caja.html", user=session["user"], clientes=terceros, numero=last_num + 1, fecha=datetime.now().strftime("%Y-%m-%d"))
 
 
@@ -1044,8 +1199,10 @@ def recibo_caja():
 def recibo_caja_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -1053,35 +1210,53 @@ def recibo_caja_save():
             VALUES (%s, %s, %s, %s, %s) RETURNING id
         """, (data.get("numero"), data.get("fecha") or datetime.now().strftime("%Y-%m-%d"),
               data.get("tercero_id"), data.get("concepto"), float(data.get("valor"))))
-        recibo_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        recibo_id = result["id"]
+        
         conn.commit()
-        conn.close()
+        
+        # Crear asiento contable
         crear_asiento_recibo(recibo_id)
+        
         return jsonify({"success": True, "recibo_num": data.get("numero")})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en recibo_caja_save: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/recibos/lista", methods=["POST"])
 def api_recibos_lista():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         conn = get_db_connection()
         cur = conn.cursor()
-        recibos = cur.execute("""
+        cur.execute("""
             SELECT r.id, r.numero, r.fecha, r.concepto, r.valor,
                    t.nombres || ' ' || COALESCE(t.apellidos,'') AS tercero
             FROM recibos_caja r
             LEFT JOIN terceros t ON r.tercero_id = t.id
             WHERE r.fecha BETWEEN %s AND %s
             ORDER BY r.fecha DESC, r.numero DESC
-        """, (data.get("fecha_inicio"), data.get("fecha_fin"))).fetchall()
-        conn.close()
+        """, (data.get("fecha_inicio"), data.get("fecha_fin")))
+        recibos = cur.fetchall()
+        
         return jsonify({"success": True, "recibos": [dict(r) for r in recibos]})
     except Exception as e:
+        print(f"Error en api_recibos_lista: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 # =========================
@@ -1091,19 +1266,24 @@ def api_recibos_lista():
 def comprobante_egreso():
     if "user" not in session:
         return redirect(url_for("login"))
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        terceros = cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') AS nombre FROM terceros").fetchall()
-    except Exception:
+        cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') AS nombre FROM terceros")
+        terceros = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando terceros: {e}")
         terceros = []
     try:
         cur.execute("SELECT MAX(numero) AS max_num FROM comprobantes_egreso")
         row = cur.fetchone()
         last_num = row["max_num"] if row and row["max_num"] else 0
-    except Exception:
+    except Exception as e:
+        print(f"Error obteniendo último número: {e}")
         last_num = 0
     conn.close()
+    
     return render_template("comprobante_egreso.html", user=session["user"], terceros=terceros, numero=last_num + 1, fecha=datetime.now().strftime("%Y-%m-%d"))
 
 
@@ -1111,8 +1291,10 @@ def comprobante_egreso():
 def comprobante_egreso_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -1120,35 +1302,53 @@ def comprobante_egreso_save():
             VALUES (%s, %s, %s, %s, %s) RETURNING id
         """, (data.get("numero"), data.get("fecha") or datetime.now().strftime("%Y-%m-%d"),
               data.get("tercero_id"), data.get("concepto"), float(data.get("valor"))))
-        egreso_id = cur.fetchone()["id"]
+        
+        result = cur.fetchone()
+        egreso_id = result["id"]
+        
         conn.commit()
-        conn.close()
+        
+        # Crear asiento contable
         crear_asiento_egreso(egreso_id)
+        
         return jsonify({"success": True, "egreso_num": data.get("numero")})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en comprobante_egreso_save: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/egresos/lista", methods=["POST"])
 def api_egresos_lista():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         conn = get_db_connection()
         cur = conn.cursor()
-        egresos = cur.execute("""
+        cur.execute("""
             SELECT e.id, e.numero, e.fecha, e.concepto, e.valor,
                    t.nombres || ' ' || COALESCE(t.apellidos,'') AS tercero
             FROM comprobantes_egreso e
             LEFT JOIN terceros t ON e.tercero_id = t.id
             WHERE e.fecha BETWEEN %s AND %s
             ORDER BY e.fecha DESC, e.numero DESC
-        """, (data.get("fecha_inicio"), data.get("fecha_fin"))).fetchall()
-        conn.close()
+        """, (data.get("fecha_inicio"), data.get("fecha_fin")))
+        egresos = cur.fetchall()
+        
         return jsonify({"success": True, "egresos": [dict(e) for e in egresos]})
     except Exception as e:
+        print(f"Error en api_egresos_lista: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # =========================
 # CONTABILIDAD
@@ -1164,12 +1364,17 @@ def contabilidad():
 def puc():
     if "user" not in session:
         return redirect(url_for("login"))
-    conn = get_db_connection(); cur = conn.cursor()
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
     try:
-        cuentas = cur.execute("SELECT codigo, nombre, tipo FROM puc ORDER BY codigo").fetchall()
-    except Exception:
+        cur.execute("SELECT codigo, nombre, tipo FROM puc ORDER BY codigo")
+        cuentas = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando PUC: {e}")
         cuentas = []
     conn.close()
+    
     return render_template("puc.html", user=session["user"], cuentas=cuentas)
 
 
@@ -1187,55 +1392,82 @@ def movimientos():
 def add_cuenta():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+    
+    conn = None
     try:
+        data = request.get_json()
         codigo = data.get("codigo", "").strip()
         nombre = data.get("nombre", "").strip()
         tipo = data.get("tipo", "").strip()
+        
         if not all([codigo, nombre, tipo]):
             return jsonify({"success": False, "error": "Todos los campos son obligatorios"})
-        conn = get_db_connection(); cur = conn.cursor()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
         cur.execute("INSERT INTO puc (codigo, nombre, tipo) VALUES (%s, %s, %s)",
                     (codigo, nombre, tipo))
-        conn.commit(); conn.close()
+        conn.commit()
+        
         return jsonify({"success": True, "mensaje": f"Cuenta {codigo} agregada correctamente"})
+    except pg_errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": "El código de cuenta ya existe"})
     except Exception as e:
-        # Error por duplicado en clave primaria/única
-        if "duplicate key" in str(e).lower():
-            return jsonify({"success": False, "error": "El código de cuenta ya existe"})
+        if conn:
+            conn.rollback()
+        print(f"Error en add_cuenta: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/movimientos", methods=["POST"])
 def get_movimientos():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
-    fecha_inicio, fecha_fin = data.get("fecha_inicio"), data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        movimientos = cur.execute("""
+        data = request.get_json()
+        fecha_inicio, fecha_fin = data.get("fecha_inicio"), data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
             SELECT m.fecha, m.descripcion, p.codigo, p.nombre, 
                    m.debito, m.credito, m.modulo, m.referencia_id
             FROM movimientos_contables m
             JOIN puc p ON m.cuenta_id = p.id
             WHERE m.fecha BETWEEN %s AND %s
             ORDER BY m.fecha DESC, m.id DESC
-        """, (fecha_inicio, fecha_fin)).fetchall()
-        conn.close()
+        """, (fecha_inicio, fecha_fin))
+        movimientos = cur.fetchall()
+        
         return jsonify({"success": True, "movimientos": [dict(r) for r in movimientos]})
     except Exception as e:
+        print(f"Error en get_movimientos: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/balance", methods=["POST"])
 def get_balance():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json(); fecha_fin = data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        balance = cur.execute("""
+        data = request.get_json()
+        fecha_fin = data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
             SELECT p.codigo, p.nombre, p.tipo,
                    SUM(m.debito) AS total_debito,
                    SUM(m.credito) AS total_credito,
@@ -1248,17 +1480,23 @@ def get_balance():
             GROUP BY p.id, p.codigo, p.nombre, p.tipo
             HAVING SUM(COALESCE(m.debito,0)) > 0 OR SUM(COALESCE(m.credito,0)) > 0
             ORDER BY p.codigo
-        """, (fecha_fin,)).fetchall()
-        conn.close()
+        """, (fecha_fin,))
+        balance = cur.fetchall()
+        
         return jsonify({"success": True, "balance": [dict(r) for r in balance]})
     except Exception as e:
+        print(f"Error en get_balance: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/puc/seed", methods=["POST"])
 def seed_puc():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
+    
     cuentas_basicas = [
         ("1105", "Caja", "activo"),
         ("1110", "Bancos", "activo"),
@@ -1279,18 +1517,28 @@ def seed_puc():
         ("5195", "Diversos", "gasto"),
         ("6135", "Comercio al por Mayor y al Detal", "gasto")
     ]
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
+        conn = get_db_connection()
+        cur = conn.cursor()
         for codigo, nombre, tipo in cuentas_basicas:
             cur.execute("""
                 INSERT INTO puc (codigo, nombre, tipo) 
                 VALUES (%s, %s, %s)
                 ON CONFLICT (codigo) DO NOTHING
             """, (codigo, nombre, tipo))
-        conn.commit(); conn.close()
+        conn.commit()
+        
         return jsonify({"success": True, "mensaje": "PUC inicializado correctamente"})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en seed_puc: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 # =========================
@@ -1310,20 +1558,29 @@ def resumenes():
 def api_resumen_ventas():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
-    fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        ventas_diarias = cur.execute("""
+        data = request.get_json()
+        fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
             SELECT DATE(fecha) AS dia, COUNT(*) AS num_facturas, SUM(total) AS total_ventas
             FROM facturas WHERE fecha BETWEEN %s AND %s
             GROUP BY DATE(fecha) ORDER BY dia
-        """, (fi, ff)).fetchall()
-        total_periodo = cur.execute("""
+        """, (fi, ff))
+        ventas_diarias = cur.fetchall()
+        
+        cur.execute("""
             SELECT COUNT(*) AS facturas, SUM(total) AS total, AVG(total) AS promedio
             FROM facturas WHERE fecha BETWEEN %s AND %s
-        """, (fi, ff)).fetchone()
-        producto_top = cur.execute("""
+        """, (fi, ff))
+        total_periodo = cur.fetchone()
+        
+        cur.execute("""
             SELECT p.nombre, SUM(df.cantidad) AS cantidad_vendida, SUM(df.total) AS ingresos_producto
             FROM detalle_factura df 
             JOIN productos p ON df.producto_id = p.id
@@ -1331,8 +1588,10 @@ def api_resumen_ventas():
             WHERE f.fecha BETWEEN %s AND %s
             GROUP BY p.id, p.nombre 
             ORDER BY cantidad_vendida DESC LIMIT 1
-        """, (fi, ff)).fetchone()
-        top_productos = cur.execute("""
+        """, (fi, ff))
+        producto_top = cur.fetchone()
+        
+        cur.execute("""
             SELECT p.nombre, SUM(df.cantidad) AS cantidad_vendida, SUM(df.total) AS ingresos_producto,
                    COUNT(DISTINCT f.id) AS facturas_aparece
             FROM detalle_factura df 
@@ -1341,15 +1600,18 @@ def api_resumen_ventas():
             WHERE f.fecha BETWEEN %s AND %s
             GROUP BY p.id, p.nombre 
             ORDER BY cantidad_vendida DESC LIMIT 5
-        """, (fi, ff)).fetchall()
-        cliente_top = cur.execute("""
+        """, (fi, ff))
+        top_productos = cur.fetchall()
+        
+        cur.execute("""
             SELECT t.nombres || ' ' || COALESCE(t.apellidos,'') AS cliente,
                    COUNT(*) AS num_compras, SUM(f.total) AS total_comprado
             FROM facturas f JOIN terceros t ON f.tercero_id = t.id
             WHERE f.fecha BETWEEN %s AND %s
             GROUP BY t.id, cliente ORDER BY total_comprado DESC LIMIT 1
-        """, (fi, ff)).fetchone()
-        conn.close()
+        """, (fi, ff))
+        cliente_top = cur.fetchone()
+        
         return jsonify({"success": True,
                         "ventas_diarias": [dict(r) for r in ventas_diarias],
                         "total_periodo": dict(total_periodo) if total_periodo else {},
@@ -1357,36 +1619,51 @@ def api_resumen_ventas():
                         "top_productos": [dict(r) for r in top_productos],
                         "cliente_top": dict(cliente_top) if cliente_top else {}})
     except Exception as e:
+        print(f"Error en api_resumen_ventas: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/resumen/compras", methods=["POST"])
 def api_resumen_compras():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
-    fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        compras_diarias = cur.execute("""
+        data = request.get_json()
+        fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
             SELECT DATE(fecha) AS dia, COUNT(*) AS num_compras, SUM(total) AS total_compras
             FROM compras WHERE fecha BETWEEN %s AND %s
             GROUP BY DATE(fecha) ORDER BY dia
-        """, (fi, ff)).fetchall()
-        total_compras = cur.execute("""
+        """, (fi, ff))
+        compras_diarias = cur.fetchall()
+        
+        cur.execute("""
             SELECT COUNT(*) AS compras, SUM(total) AS total, AVG(total) AS promedio,
-                   SUM(CASE WHEN pagada=1 THEN total ELSE 0 END) AS pagadas,
-                   SUM(CASE WHEN pagada=0 THEN total ELSE 0 END) AS pendientes
+                   SUM(CASE WHEN pagada=true THEN total ELSE 0 END) AS pagadas,
+                   SUM(CASE WHEN pagada=false THEN total ELSE 0 END) AS pendientes
             FROM compras WHERE fecha BETWEEN %s AND %s
-        """, (fi, ff)).fetchone()
-        proveedor_top = cur.execute("""
+        """, (fi, ff))
+        total_compras = cur.fetchone()
+        
+        cur.execute("""
             SELECT t.nombres || ' ' || COALESCE(t.apellidos,'') AS proveedor,
                    COUNT(*) AS num_compras, SUM(c.total) AS total_comprado
             FROM compras c JOIN terceros t ON c.tercero_id = t.id
             WHERE c.fecha BETWEEN %s AND %s
             GROUP BY t.id, proveedor ORDER BY total_comprado DESC LIMIT 1
-        """, (fi, ff)).fetchone()
-        productos_comprados = cur.execute("""
+        """, (fi, ff))
+        proveedor_top = cur.fetchone()
+        
+        cur.execute("""
             SELECT p.nombre, SUM(dc.cantidad) AS cantidad_comprada, SUM(dc.total) AS total_invertido,
                    COUNT(DISTINCT c.id) AS compras_aparece
             FROM detalle_compra dc 
@@ -1394,111 +1671,158 @@ def api_resumen_compras():
             JOIN compras c ON dc.compra_id = c.id
             WHERE c.fecha BETWEEN %s AND %s
             GROUP BY p.id, p.nombre ORDER BY cantidad_comprada DESC LIMIT 5
-        """, (fi, ff)).fetchall()
-        conn.close()
+        """, (fi, ff))
+        productos_comprados = cur.fetchall()
+        
         return jsonify({"success": True,
                         "compras_diarias": [dict(r) for r in compras_diarias],
                         "total_compras": dict(total_compras) if total_compras else {},
                         "proveedor_top": dict(proveedor_top) if proveedor_top else {},
                         "productos_comprados": [dict(r) for r in productos_comprados]})
     except Exception as e:
+        print(f"Error en api_resumen_compras: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/facturas/lista", methods=["POST"])
 def api_facturas_lista():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json(); fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        facturas = cur.execute("""
+        data = request.get_json()
+        fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
             SELECT f.id, f.numero, f.fecha, f.total,
                    t.nombres || ' ' || COALESCE(t.apellidos,'') AS cliente
             FROM facturas f LEFT JOIN terceros t ON f.tercero_id = t.id
             WHERE f.fecha BETWEEN %s AND %s
             ORDER BY f.fecha DESC, f.numero DESC
-        """, (fi, ff)).fetchall()
-        conn.close()
+        """, (fi, ff))
+        facturas = cur.fetchall()
+        
         return jsonify({"success": True, "facturas": [dict(r) for r in facturas]})
     except Exception as e:
+        print(f"Error en api_facturas_lista: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/compras/lista", methods=["POST"])
 def api_compras_lista():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json(); fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        compras = cur.execute("""
+        data = request.get_json()
+        fi, ff = data.get("fecha_inicio"), data.get("fecha_fin")
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
             SELECT c.id, c.numero, c.fecha, c.total, c.forma_pago, c.pagada,
                    t.nombres || ' ' || COALESCE(t.apellidos,'') AS proveedor
             FROM compras c LEFT JOIN terceros t ON c.tercero_id = t.id
             WHERE c.fecha BETWEEN %s AND %s
             ORDER BY c.fecha DESC, c.numero DESC
-        """, (fi, ff)).fetchall()
-        conn.close()
+        """, (fi, ff))
+        compras = cur.fetchall()
+        
         return jsonify({"success": True, "compras": [dict(r) for r in compras]})
     except Exception as e:
+        print(f"Error en api_compras_lista: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/factura/<int:factura_id>")
 def api_factura_detalle(factura_id):
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        factura = cur.execute("""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
             SELECT f.*, t.nombres || ' ' || COALESCE(t.apellidos,'') AS cliente,
                    t.telefono, t.direccion
             FROM facturas f LEFT JOIN terceros t ON f.tercero_id = t.id
             WHERE f.id = %s
-        """, (factura_id,)).fetchone()
+        """, (factura_id,))
+        factura = cur.fetchone()
+        
         if not factura:
-            conn.close()
             return jsonify({"success": False, "error": "Factura no encontrada"})
-        detalle = cur.execute("""
+        
+        cur.execute("""
             SELECT df.cantidad, df.precio, df.total, p.nombre AS producto
             FROM detalle_factura df JOIN productos p ON df.producto_id = p.id
             WHERE df.factura_id = %s
-        """, (factura_id,)).fetchall()
-        conn.close()
+        """, (factura_id,))
+        detalle = cur.fetchall()
+        
         return jsonify({"success": True,
                         "factura": dict(factura),
                         "detalle": [dict(r) for r in detalle]})
     except Exception as e:
+        print(f"Error en api_factura_detalle: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/api/compra/<int:compra_id>")
 def api_compra_detalle(compra_id):
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        compra = cur.execute("""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
             SELECT c.*, t.nombres || ' ' || COALESCE(t.apellidos,'') AS proveedor,
                    t.telefono, t.direccion
             FROM compras c LEFT JOIN terceros t ON c.tercero_id = t.id
             WHERE c.id = %s
-        """, (compra_id,)).fetchone()
+        """, (compra_id,))
+        compra = cur.fetchone()
+        
         if not compra:
-            conn.close()
             return jsonify({"success": False, "error": "Compra no encontrada"})
-        detalle = cur.execute("""
+        
+        cur.execute("""
             SELECT dc.cantidad, dc.costo, dc.total, p.nombre AS producto
             FROM detalle_compra dc JOIN productos p ON dc.producto_id = p.id
             WHERE dc.compra_id = %s
-        """, (compra_id,)).fetchall()
-        conn.close()
+        """, (compra_id,))
+        detalle = cur.fetchall()
+        
         return jsonify({"success": True,
                         "compra": dict(compra),
                         "detalle": [dict(r) for r in detalle]})
     except Exception as e:
+        print(f"Error en api_compra_detalle: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # =========================
 # AJUSTES (USUARIOS / CONFIG)
@@ -1514,14 +1838,17 @@ def ajustes():
 def ajustes_usuarios():
     if "user" not in session:
         return redirect(url_for("login"))
-    conn = get_db_connection(); cur = conn.cursor()
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
     try:
-        usuarios = cur.execute(
-            "SELECT id, usuario, rol, activo FROM usuarios ORDER BY id"
-        ).fetchall()
-    except Exception:
+        cur.execute("SELECT id, usuario, rol, activo FROM usuarios ORDER BY id")
+        usuarios = cur.fetchall()
+    except Exception as e:
+        print(f"Error cargando usuarios: {e}")
         usuarios = []
     conn.close()
+    
     return render_template("usuarios.html", user=session["user"], usuarios=usuarios)
 
 
@@ -1529,50 +1856,76 @@ def ajustes_usuarios():
 def add_usuario():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
-    usuario = (data.get("usuario") or "").strip()
-    clave = (data.get("clave") or "").strip()
-    rol = data.get("rol") or "cajero"
-    if not usuario or not clave:
-        return jsonify({"success": False, "error": "usuario y clave requeridos"})
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
+        data = request.get_json()
+        usuario = (data.get("usuario") or "").strip()
+        clave = (data.get("clave") or "").strip()
+        rol = data.get("rol") or "cajero"
+        
+        if not usuario or not clave:
+            return jsonify({"success": False, "error": "usuario y clave requeridos"})
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
         hashed = generate_password_hash(clave)
         cur.execute(
-            "INSERT INTO usuarios (usuario, clave, rol, activo) VALUES (%s, %s, %s, 1)",
+            "INSERT INTO usuarios (usuario, clave, rol, activo) VALUES (%s, %s, %s, true)",
             (usuario, hashed, rol),
         )
         conn.commit()
-        conn.close()
+        
         return jsonify({"success": True, "mensaje": "Usuario creado"})
+    except pg_errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": "El usuario ya existe"})
     except Exception as e:
-        if "duplicate key" in str(e).lower():
-            return jsonify({"success": False, "error": "El usuario ya existe"})
+        if conn:
+            conn.rollback()
+        print(f"Error en add_usuario: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/ajustes/usuarios/toggle/<int:user_id>", methods=["POST"])
 def toggle_usuario(user_id):
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
     try:
-        conn = get_db_connection(); cur = conn.cursor()
-        u = cur.execute("SELECT activo FROM usuarios WHERE id=%s", (user_id,)).fetchone()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT activo FROM usuarios WHERE id=%s", (user_id,))
+        u = cur.fetchone()
+        
         if not u:
-            conn.close()
             return jsonify({"success": False, "error": "Usuario no encontrado"})
-        nuevo_estado = 0 if u["activo"] == 1 else 1
+        
+        nuevo_estado = not u["activo"]
         cur.execute("UPDATE usuarios SET activo=%s WHERE id=%s", (nuevo_estado, user_id))
         conn.commit()
-        conn.close()
+        
         return jsonify({"success": True, "estado": nuevo_estado})
     except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en toggle_usuario: {e}")
         return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/schema")
 def schema():
-    conn = get_db_connection(); cur = conn.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
     cur.execute("""
         SELECT table_name, ordinal_position, column_name, data_type
         FROM information_schema.columns
@@ -1580,7 +1933,8 @@ def schema():
         ORDER BY table_name, ordinal_position;
     """)
     rows = cur.fetchall()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
 
     salida = {}
     for r in rows:
