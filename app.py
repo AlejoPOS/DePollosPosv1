@@ -982,6 +982,14 @@ def add_tercero():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+# =========================
+# GASTOS
+# =========================
+@app.route("/gastos")
+def gastos():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    return render_template("gastos.html", user=session["user"])
 
 # =========================
 # RECIBOS DE CAJA
