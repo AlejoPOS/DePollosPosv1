@@ -1958,7 +1958,30 @@ def schema():
 @app.route("/")
 def index():
     return redirect(url_for("login"))
-
+python@app.route("/arreglar-base-datos-12345")
+def arreglar_base_datos():
+    """Endpoint temporal para arreglar la base de datos"""
+    if "user" not in session:
+        return "Debes iniciar sesión primero", 401
+    
+    if session.get("rol") != "admin":
+        return "Solo administradores pueden hacer esto", 403
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE puc ADD CONSTRAINT puc_codigo_unique UNIQUE (codigo);")
+        conn.commit()
+        return "✅ Base de datos corregida exitosamente. Ahora ve a Contabilidad → PUC e inicializa el PUC."
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "already exists" in error_msg or "duplicate" in error_msg:
+            return "✓ La restricción ya existe. Todo está bien. Ve a Contabilidad → PUC e inicializa el PUC."
+        return f"❌ Error: {e}"
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
