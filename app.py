@@ -393,8 +393,7 @@ def facturacion_save():
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        numero = data.get("numero")
-        fecha = data.get("fecha")
+        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
         lines = data.get("lines", [])
 
         total = sum(float(l["total"]) for l in lines)
@@ -402,7 +401,12 @@ def facturacion_save():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Insertar cabecera y recuperar ID con RETURNING
+        # ✅ Generar consecutivo automático
+        cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
+        row = cur.fetchone()
+        numero = row["next_num"]
+
+        # Insertar cabecera
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
             VALUES (%s, %s, %s, %s) RETURNING id
