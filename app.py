@@ -384,16 +384,22 @@ def facturacion_save():
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        numero = data.get("numero")
-        fecha = data.get("fecha")
+        numero = data.get("numero")  # <-- puede venir vacío desde el frontend
+        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
         lines = data.get("lines", [])
-
-        total = sum(float(l["total"]) for l in lines)
 
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Insertar factura con consecutivo
+        # ✅ Si no vino el numero, lo generamos acá
+        if not numero:
+            cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
+            row = cur.fetchone()
+            numero = row["next_num"] if row else 1
+
+        total = sum(float(l["total"]) for l in lines)
+
+        # Insertar factura
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
             VALUES (%s, %s, %s, %s)
@@ -401,15 +407,15 @@ def facturacion_save():
         """, (cliente_id, numero, fecha, total))
         row = cur.fetchone()
 
-        # ✅ Detectar el nombre correcto de la PK
+        # Detectar PK
         if "id" in row:
             factura_id = row["id"]
         elif "factura_id" in row:
             factura_id = row["factura_id"]
         else:
-            raise Exception("No se encontró la columna PK en facturas")
+            raise Exception("No se encontró la PK en facturas")
 
-        # Detalle de factura y actualización de inventario
+        # Insertar detalle y actualizar inventario
         for l in lines:
             cur.execute("""
                 INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
@@ -418,9 +424,9 @@ def facturacion_save():
 
             cur.execute("""
                 UPDATE productos
-                SET stock = stock - ?
-                WHERE id = ?
-            """.replace("?", "%s"), (l["cantidad"], l["producto_id"]))
+                SET stock = stock - %s
+                WHERE id = %s
+            """, (l["cantidad"], l["producto_id"]))
 
         conn.commit()
         conn.close()
