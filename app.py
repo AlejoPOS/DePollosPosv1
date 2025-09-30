@@ -1952,13 +1952,7 @@ def schema():
     return html
 
 
-# =========================
-# INICIO
-# =========================
-@app.route("/")
-def index():
-    return redirect(url_for("login"))
-python@app.route("/arreglar-base-datos-12345")
+@app.route("/arreglar-base-datos-12345")
 def arreglar_base_datos():
     """Endpoint temporal para arreglar la base de datos"""
     if "user" not in session:
@@ -1982,6 +1976,15 @@ def arreglar_base_datos():
     finally:
         if conn:
             conn.close()
+
+
+# =========================
+# INICIO
+# =========================
+@app.route("/")
+def index():
+    return redirect(url_for("login"))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
