@@ -355,45 +355,37 @@ def facturacion():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        clientes = cur.execute("""
-            SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre
-            FROM terceros WHERE tipo='Cliente'
-        """).fetchall()
+        clientes = cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre FROM terceros WHERE tipo='Cliente'").fetchall()
     except Exception:
         clientes = []
     try:
-        productos = cur.execute("""
-            SELECT id, nombre, stock, precio
-            FROM productos
-        """).fetchall()
+        productos = cur.execute("SELECT id, nombre, precio, stock FROM productos").fetchall()
     except Exception:
         productos = []
     try:
-        cur.execute("SELECT MAX(id) FROM facturas")
-        last_num = cur.fetchone()["max"] or 0
+        cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
+        row = cur.fetchone()
+        next_num = row["next_num"] if row else 1
     except Exception:
-        last_num = 0
+        next_num = 1
     conn.close()
 
-    return render_template(
-        "facturacion.html",
-        user=session["user"],
-        clientes=clientes,
-        productos=productos,
-        factura_num=last_num + 1,
-        fecha=datetime.now().strftime("%Y-%m-%d")
-    )
-
+    return render_template("facturacion.html",
+                           user=session["user"],
+                           clientes=clientes,
+                           productos=productos,
+                           factura_num=next_num,
+                           fecha=datetime.now().strftime("%Y-%m-%d"))
 
 @app.route("/facturacion/save", methods=["POST"])
 def facturacion_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
-
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
+        numero = data.get("numero")
+        fecha = data.get("fecha")
         lines = data.get("lines", [])
 
         total = sum(float(l["total"]) for l in lines)
@@ -401,31 +393,34 @@ def facturacion_save():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # ✅ Generar consecutivo automático
-        cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
-        row = cur.fetchone()
-        numero = row["next_num"]
-
-        # Insertar cabecera
+        # Insertar factura con consecutivo
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
-            VALUES (%s, %s, %s, %s) RETURNING id
+            VALUES (%s, %s, %s, %s)
+            RETURNING *
         """, (cliente_id, numero, fecha, total))
-        factura_id = cur.fetchone()["id"]
+        row = cur.fetchone()
 
-        # Insertar detalle + actualizar inventario
+        # ✅ Detectar el nombre correcto de la PK
+        if "id" in row:
+            factura_id = row["id"]
+        elif "factura_id" in row:
+            factura_id = row["factura_id"]
+        else:
+            raise Exception("No se encontró la columna PK en facturas")
+
+        # Detalle de factura y actualización de inventario
         for l in lines:
             cur.execute("""
-    INSERT INTO facturas (tercero_id, numero, fecha, total)
-    VALUES (%s, %s, %s, %s) RETURNING factura_id
-""", (cliente_id, numero, fecha, total))
-factura_id = cur.fetchone()["factura_id"]
+                INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (factura_id, l["producto_id"], l["cantidad"], l["precio"], l["total"]))
 
             cur.execute("""
                 UPDATE productos
-                SET stock = stock - %s
-                WHERE id = %s
-            """, (l["cantidad"], l["producto_id"]))
+                SET stock = stock - ?
+                WHERE id = ?
+            """.replace("?", "%s"), (l["cantidad"], l["producto_id"]))
 
         conn.commit()
         conn.close()
