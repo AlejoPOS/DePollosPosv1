@@ -384,14 +384,14 @@ def facturacion_save():
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        numero = data.get("numero")  # <-- puede venir vacío desde el frontend
+        numero = data.get("numero")  # Puede venir vacío
         fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
         lines = data.get("lines", [])
 
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # ✅ Si no vino el numero, lo generamos acá
+        # ✅ Generar número si no viene
         if not numero:
             cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
             row = cur.fetchone()
@@ -399,23 +399,16 @@ def facturacion_save():
 
         total = sum(float(l["total"]) for l in lines)
 
-        # Insertar factura
+        # ✅ Insertar factura y devolver el ID correcto
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
             VALUES (%s, %s, %s, %s)
-            RETURNING *
+            RETURNING id
         """, (cliente_id, numero, fecha, total))
         row = cur.fetchone()
+        factura_id = row["id"]
 
-        # Detectar PK
-        if "id" in row:
-            factura_id = row["id"]
-        elif "factura_id" in row:
-            factura_id = row["factura_id"]
-        else:
-            raise Exception("No se encontró la PK en facturas")
-
-        # Insertar detalle y actualizar inventario
+        # ✅ Insertar detalle y actualizar inventario
         for l in lines:
             cur.execute("""
                 INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
@@ -435,7 +428,6 @@ def facturacion_save():
     except Exception as e:
         print("Error en facturacion_save:", e)
         return jsonify({"success": False, "error": str(e)})
-
 # =========================
 # FACTURAS Y NOTAS DE CRÉDITO
 # =========================
