@@ -416,9 +416,10 @@ def facturacion_save():
         # Insertar detalle + actualizar inventario
         for l in lines:
             cur.execute("""
-                INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (factura_id, l["producto_id"], l["cantidad"], l["precio"], l["total"]))
+    INSERT INTO facturas (tercero_id, numero, fecha, total)
+    VALUES (%s, %s, %s, %s) RETURNING factura_id
+""", (cliente_id, numero, fecha, total))
+factura_id = cur.fetchone()["factura_id"]
 
             cur.execute("""
                 UPDATE productos
