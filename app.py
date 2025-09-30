@@ -384,7 +384,7 @@ def facturacion_save():
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        numero = data.get("numero")  # Puede venir vacío
+        numero = data.get("numero")
         fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
         lines = data.get("lines", [])
 
@@ -399,16 +399,21 @@ def facturacion_save():
 
         total = sum(float(l["total"]) for l in lines)
 
-        # ✅ Insertar factura y devolver el ID correcto
+        # ✅ Insertar factura (usando la PK real)
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
             VALUES (%s, %s, %s, %s)
             RETURNING id
         """, (cliente_id, numero, fecha, total))
         row = cur.fetchone()
-        factura_id = row["id"]
 
-        # ✅ Insertar detalle y actualizar inventario
+        # ⚠️ Si la tabla no tiene "id", cambia RETURNING id → RETURNING factura_id
+        factura_id = row.get("id") if row and "id" in row else row.get("factura_id")
+
+        if not factura_id:
+            raise Exception("No se pudo obtener el ID de la factura")
+
+        # ✅ Insertar detalle
         for l in lines:
             cur.execute("""
                 INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
