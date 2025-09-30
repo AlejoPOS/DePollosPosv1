@@ -346,7 +346,7 @@ def logout():
     return redirect(url_for("login"))
 
 # =========================
-# FACTURACIÓN
+# FACTURACION
 # =========================
 @app.route("/facturacion")
 def facturacion():
@@ -356,21 +356,21 @@ def facturacion():
     cur = conn.cursor()
     try:
         clientes = cur.execute("""
-            SELECT id, nombres || ' ' || COALESCE(apellidos, '') AS nombre
+            SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre
             FROM terceros WHERE tipo='Cliente'
         """).fetchall()
     except Exception:
         clientes = []
     try:
-        productos = cur.execute(
-            "SELECT id, nombre, stock, costo, precio FROM productos"
-        ).fetchall()
+        productos = cur.execute("""
+            SELECT id, nombre, stock, precio
+            FROM productos
+        """).fetchall()
     except Exception:
         productos = []
     try:
-        cur.execute("SELECT MAX(numero) AS max_num FROM facturas")
-        row = cur.fetchone()
-        last_num = row["max_num"] if row and row["max_num"] else 0
+        cur.execute("SELECT MAX(id) FROM facturas")
+        last_num = cur.fetchone()["max"] or 0
     except Exception:
         last_num = 0
     conn.close()
@@ -381,48 +381,53 @@ def facturacion():
         clientes=clientes,
         productos=productos,
         factura_num=last_num + 1,
-        fecha=datetime.now().strftime("%Y-%m-%d"),
+        fecha=datetime.now().strftime("%Y-%m-%d")
     )
 
 
 @app.route("/facturacion/save", methods=["POST"])
 def facturacion_save():
     if "user" not in session:
-        return jsonify({"success": False, "error": "No autorizado"})
-    data = request.get_json()
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+
     try:
-        tercero_id = data.get("cliente_id")
-        factura_num = data.get("factura_num")
-        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
-        lineas = data.get("lines", [])
-        total = sum(float(l.get("total", 0)) for l in lineas)
+        data = request.get_json()
+        cliente_id = data.get("cliente_id")
+        numero = data.get("numero")
+        fecha = data.get("fecha")
+        lines = data.get("lines", [])
+
+        total = sum(float(l["total"]) for l in lines)
 
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO facturas (tercero_id, numero, fecha, total) VALUES (%s, %s, %s, %s) RETURNING id",
-            (tercero_id, factura_num, fecha, total),
-        )
+
+        # Insertar cabecera y recuperar ID con RETURNING
+        cur.execute("""
+            INSERT INTO facturas (tercero_id, numero, fecha, total)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (cliente_id, numero, fecha, total))
         factura_id = cur.fetchone()["id"]
 
-        for l in lineas:
-            cur.execute(
-                """INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total) 
-                   VALUES (%s, %s, %s, %s, %s)""",
-                (factura_id, l["producto_id"], l["cantidad"], l["precio"], l["total"]),
-            )
-            cur.execute(
-                "UPDATE productos SET stock = stock - %s WHERE id = %s",
-                (l["cantidad"], l["producto_id"]),
-            )
+        # Insertar detalle + actualizar inventario
+        for l in lines:
+            cur.execute("""
+                INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (factura_id, l["producto_id"], l["cantidad"], l["precio"], l["total"]))
+
+            cur.execute("""
+                UPDATE productos
+                SET stock = stock - %s
+                WHERE id = %s
+            """, (l["cantidad"], l["producto_id"]))
 
         conn.commit()
         conn.close()
 
-        crear_asiento_venta(factura_id)
-
-        return jsonify({"success": True, "factura_num": factura_num})
+        return jsonify({"success": True, "factura_num": numero})
     except Exception as e:
+        print("Error en facturacion_save:", e)
         return jsonify({"success": False, "error": str(e)})
 
 # =========================
