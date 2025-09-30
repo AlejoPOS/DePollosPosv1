@@ -648,12 +648,25 @@ def inventario():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        productos_raw = cur.execute("SELECT id, nombre, stock, costo, precio FROM productos").fetchall()
+        productos_raw = cur.execute(
+            "SELECT id, nombre, stock, costo, precio FROM productos"
+        ).fetchall()
     except Exception:
         productos_raw = []
     conn.close()
-    productos = [{"id": p[0], "nombre": p[1], "stock": p[2], "costo": p[3], "precio": p[4]} for p in productos_raw]
+
+    productos = [
+        {
+            "id": p["id"],
+            "nombre": p["nombre"],
+            "stock": p["stock"],
+            "costo": p["costo"],
+            "precio": p["precio"],
+        }
+        for p in productos_raw
+    ]
     return render_template("inventario.html", user=session["user"], productos=productos)
+
 
 @app.route("/add_producto", methods=["POST"])
 def add_producto():
@@ -669,13 +682,25 @@ def add_producto():
             return jsonify({"success": False, "error": "Nombre requerido"})
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO productos (nombre, stock, costo, precio) VALUES (?, ?, ?, ?)", (nombre, stock, costo, precio))
+        cur.execute(
+            "INSERT INTO productos (nombre, stock, costo, precio) VALUES (%s, %s, %s, %s)",
+            (nombre, stock, costo, precio),
+        )
         conn.commit()
-        nuevo_id = cur.lastrowid
+        # En PostgreSQL lastrowid no existe, usamos RETURNING
+        cur.execute("SELECT currval(pg_get_serial_sequence('productos','id')) AS id;")
+        nuevo_id = cur.fetchone()["id"]
         conn.close()
-        return jsonify({"success": True, "id": nuevo_id, "mensaje": f"Producto '{nombre}' agregado correctamente"})
+        return jsonify(
+            {
+                "success": True,
+                "id": nuevo_id,
+                "mensaje": f"Producto '{nombre}' agregado correctamente",
+            }
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
 
 @app.route("/update_producto/<int:producto_id>", methods=["PUT"])
 def update_producto(producto_id):
@@ -691,12 +716,16 @@ def update_producto(producto_id):
             return jsonify({"success": False, "error": "Nombre requerido"})
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("UPDATE productos SET nombre=?, stock=?, costo=?, precio=? WHERE id=?", (nombre, stock, costo, precio, producto_id))
+        cur.execute(
+            "UPDATE productos SET nombre=%s, stock=%s, costo=%s, precio=%s WHERE id=%s",
+            (nombre, stock, costo, precio, producto_id),
+        )
         conn.commit()
         conn.close()
         return jsonify({"success": True, "mensaje": "Producto actualizado correctamente"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
 
 @app.route("/delete_producto/<int:producto_id>", methods=["DELETE"])
 def delete_producto(producto_id):
@@ -705,15 +734,16 @@ def delete_producto(producto_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM productos WHERE id=?", (producto_id,))
+        cur.execute("DELETE FROM productos WHERE id=%s", (producto_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True, "mensaje": "Producto eliminado correctamente"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+
 # =========================
-# API / DEBUG: listar productos (útil para verificar DB)
+# API / DEBUG: listar productos
 # =========================
 @app.route("/api/productos")
 def api_productos():
@@ -722,7 +752,9 @@ def api_productos():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        prows = cur.execute("SELECT id, nombre, stock, costo, precio FROM productos ORDER BY nombre").fetchall()
+        prows = cur.execute(
+            "SELECT id, nombre, stock, costo, precio FROM productos ORDER BY nombre"
+        ).fetchall()
         productos = [dict(p) for p in prows]
     except Exception as e:
         print("Error en api_productos:", e)
