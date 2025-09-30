@@ -1984,7 +1984,159 @@ def arreglar_base_datos():
 @app.route("/")
 def index():
     return redirect(url_for("login"))
-
+@app.route("/reset-database-emergency-99999")
+def reset_database_emergency():
+    """
+    ⚠️ ENDPOINT DE EMERGENCIA - BORRA TODA LA BASE DE DATOS
+    Solo accesible para admin
+    """
+    if "user" not in session:
+        return "❌ Debes iniciar sesión primero", 401
+    
+    if session.get("rol") != "admin":
+        return "❌ Solo administradores pueden hacer esto", 403
+    
+    conn = None
+    try:
+        # Conectar
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        html = "<html><head><title>Reset Database</title></head><body style='font-family: monospace; padding: 20px;'>"
+        html += "<h2>⚠️ RESETEO DE BASE DE DATOS</h2>"
+        
+        # Paso 1: Borrar todo
+        html += "<p>🗑️ Borrando esquema público...</p>"
+        cur.execute("DROP SCHEMA public CASCADE;")
+        cur.execute("CREATE SCHEMA public;")
+        conn.commit()
+        html += "<p style='color: green;'>✅ Base de datos limpia</p>"
+        
+        # Paso 2: Crear tablas
+        html += "<p>🔄 Creando tablas...</p>"
+        
+        # Importar y ejecutar el schema
+        from init_db_postgres import schema
+        cur.execute(schema)
+        conn.commit()
+        html += "<p style='color: green;'>✅ Tablas creadas</p>"
+        
+        # Paso 3: Verificar tablas creadas
+        cur.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            ORDER BY table_name
+        """)
+        tablas = cur.fetchall()
+        
+        html += f"<h3>📋 Tablas creadas ({len(tablas)}):</h3><ul>"
+        for tabla in tablas:
+            html += f"<li>✓ {tabla[0]}</li>"
+        html += "</ul>"
+        
+        # Paso 4: Inicializar PUC automáticamente
+        html += "<p>📊 Inicializando Plan de Cuentas...</p>"
+        
+        cuentas_basicas = [
+            ("1105", "Caja", "activo"),
+            ("1110", "Bancos", "activo"),
+            ("1305", "Clientes", "activo"),
+            ("1435", "Inventario de Mercancías", "activo"),
+            ("1540", "Equipo de Oficina", "activo"),
+            ("2205", "Proveedores", "pasivo"),
+            ("2365", "Retención en la Fuente", "pasivo"),
+            ("2404", "IVA por Pagar", "pasivo"),
+            ("3105", "Capital Social", "patrimonio"),
+            ("3605", "Utilidades Retenidas", "patrimonio"),
+            ("4135", "Comercio al por Mayor y al Detal", "ingreso"),
+            ("4175", "Devoluciones en Ventas", "ingreso"),
+            ("4199", "Otros Ingresos", "ingreso"),
+            ("5105", "Gastos de Personal", "gasto"),
+            ("5135", "Servicios", "gasto"),
+            ("5140", "Gastos Legales", "gasto"),
+            ("5195", "Diversos", "gasto"),
+            ("6135", "Comercio al por Mayor y al Detal", "gasto")
+        ]
+        
+        for codigo, nombre, tipo in cuentas_basicas:
+            cur.execute("""
+                INSERT INTO puc (codigo, nombre, tipo) 
+                VALUES (%s, %s, %s)
+                ON CONFLICT (codigo) DO NOTHING
+            """, (codigo, nombre, tipo))
+        
+        conn.commit()
+        html += f"<p style='color: green;'>✅ {len(cuentas_basicas)} cuentas del PUC creadas</p>"
+        
+        # Crear algunos datos de ejemplo
+        html += "<p>👥 Creando datos de ejemplo...</p>"
+        
+        # Cliente de ejemplo
+        cur.execute("""
+            INSERT INTO terceros (nombres, apellidos, telefono, correo, direccion, tipo)
+            VALUES ('Cliente', 'General', '3001234567', 'cliente@ejemplo.com', 'Calle 123', 'Cliente')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        # Proveedor de ejemplo
+        cur.execute("""
+            INSERT INTO terceros (nombres, apellidos, telefono, correo, direccion, tipo)
+            VALUES ('Proveedor', 'Principal', '3009876543', 'proveedor@ejemplo.com', 'Carrera 45', 'Proveedor')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        # Productos de ejemplo
+        productos_ejemplo = [
+            ("Pollo Entero", "Pollo entero fresco", 8500, 12000, 50),
+            ("Pechuga de Pollo (Kg)", "Pechuga de pollo por kilogramo", 15000, 22000, 30),
+            ("Muslos de Pollo (Kg)", "Muslos de pollo por kilogramo", 12000, 18000, 25),
+            ("Alitas de Pollo (Kg)", "Alitas de pollo por kilogramo", 10000, 16000, 20),
+        ]
+        
+        for nombre, descripcion, costo, precio, stock in productos_ejemplo:
+            cur.execute("""
+                INSERT INTO productos (nombre, descripcion, costo, precio, stock)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (nombre, descripcion, costo, precio, stock))
+        
+        conn.commit()
+        html += "<p style='color: green;'>✅ Datos de ejemplo creados</p>"
+        
+        cur.close()
+        
+        html += "<hr>"
+        html += "<h2 style='color: green;'>🎉 ¡BASE DE DATOS REGENERADA EXITOSAMENTE!</h2>"
+        html += "<h3>📋 Resumen:</h3>"
+        html += "<ul>"
+        html += f"<li>✅ {len(tablas)} tablas creadas</li>"
+        html += f"<li>✅ {len(cuentas_basicas)} cuentas del PUC inicializadas</li>"
+        html += "<li>✅ 2 terceros de ejemplo</li>"
+        html += f"<li>✅ {len(productos_ejemplo)} productos de ejemplo</li>"
+        html += "</ul>"
+        html += "<hr>"
+        html += "<h3>🔑 Credenciales:</h3>"
+        html += "<p><strong>Usuario:</strong> admin<br><strong>Clave:</strong> 1234</p>"
+        html += "<hr>"
+        html += "<p><a href='/'>🏠 Ir al inicio</a> | <a href='/inventario'>📦 Ver inventario</a> | <a href='/contabilidad/puc'>📊 Ver PUC</a></p>"
+        html += "</body></html>"
+        
+        return html
+        
+    except Exception as e:
+        error_html = f"<html><body style='font-family: monospace; padding: 20px;'>"
+        error_html += f"<h2 style='color: red;'>❌ ERROR</h2>"
+        error_html += f"<p>{str(e)}</p>"
+        error_html += "<p><a href='/'>Volver al inicio</a></p>"
+        error_html += "</body></html>"
+        
+        if conn:
+            conn.rollback()
+        return error_html
+        
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
