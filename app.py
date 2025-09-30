@@ -346,80 +346,97 @@ def logout():
     return redirect(url_for("login"))
 
 # =========================
-# FACTURACION
+# FACTURACIÓN
 # =========================
 @app.route("/facturacion")
 def facturacion():
     if "user" not in session:
         return redirect(url_for("login"))
+
     conn = get_db_connection()
     cur = conn.cursor()
+
     try:
-        clientes = cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre FROM terceros WHERE tipo='Cliente'").fetchall()
+        # Clientes
+        clientes = cur.execute("""
+            SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre 
+            FROM terceros 
+            WHERE tipo='Cliente'
+        """).fetchall()
     except Exception:
         clientes = []
+
     try:
-        productos = cur.execute("SELECT id, nombre, precio, stock FROM productos").fetchall()
+        # Productos
+        productos = cur.execute("""
+            SELECT id, nombre, precio, stock 
+            FROM productos
+        """).fetchall()
     except Exception:
         productos = []
+
     try:
-        cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
+        # Último número de factura
+        cur.execute("SELECT MAX(numero) as last_num FROM facturas")
         row = cur.fetchone()
-        next_num = row["next_num"] if row else 1
+        last_num = row["last_num"] if row and row["last_num"] else 0
     except Exception:
-        next_num = 1
+        last_num = 0
+
     conn.close()
 
-    return render_template("facturacion.html",
-                           user=session["user"],
-                           clientes=clientes,
-                           productos=productos,
-                           factura_num=next_num,
-                           fecha=datetime.now().strftime("%Y-%m-%d"))
+    return render_template(
+        "facturacion.html",
+        user=session["user"],
+        clientes=clientes,
+        productos=productos,
+        factura_num=last_num + 1,  # Siguiente consecutivo
+        fecha=datetime.now().strftime("%Y-%m-%d")
+    )
+
 
 @app.route("/facturacion/save", methods=["POST"])
 def facturacion_save():
     if "user" not in session:
         return jsonify({"success": False, "error": "No autorizado"}), 401
+
     try:
         data = request.get_json()
         cliente_id = data.get("cliente_id")
-        numero = data.get("numero")
-        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
+        fecha = data.get("fecha")
+        numero = data.get("numero")  # viene del frontend
         lines = data.get("lines", [])
+
+        total = sum(float(l["total"]) for l in lines)
 
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # ✅ Generar número si no viene
+        # Si el número no vino en el JSON → generarlo automáticamente
         if not numero:
-            cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM facturas")
+            cur.execute("SELECT MAX(numero) as last_num FROM facturas")
             row = cur.fetchone()
-            numero = row["next_num"] if row else 1
+            numero = (row["last_num"] if row and row["last_num"] else 0) + 1
 
-        total = sum(float(l["total"]) for l in lines)
-
-        # ✅ Insertar factura (usando la PK real)
+        # Insertar cabecera con RETURNING id
         cur.execute("""
             INSERT INTO facturas (tercero_id, numero, fecha, total)
             VALUES (%s, %s, %s, %s)
             RETURNING id
         """, (cliente_id, numero, fecha, total))
-        row = cur.fetchone()
-
-        # ⚠️ Si la tabla no tiene "id", cambia RETURNING id → RETURNING factura_id
-        factura_id = row.get("id") if row and "id" in row else row.get("factura_id")
+        factura_id = cur.fetchone()["id"]
 
         if not factura_id:
             raise Exception("No se pudo obtener el ID de la factura")
 
-        # ✅ Insertar detalle
+        # Insertar detalle
         for l in lines:
             cur.execute("""
                 INSERT INTO detalle_factura (factura_id, producto_id, cantidad, precio, total)
                 VALUES (%s, %s, %s, %s, %s)
             """, (factura_id, l["producto_id"], l["cantidad"], l["precio"], l["total"]))
 
+            # Actualizar stock
             cur.execute("""
                 UPDATE productos
                 SET stock = stock - %s
@@ -430,10 +447,11 @@ def facturacion_save():
         conn.close()
 
         return jsonify({"success": True, "factura_num": numero})
+
     except Exception as e:
         print("Error en facturacion_save:", e)
         return jsonify({"success": False, "error": str(e)})
-# =========================
+
 # FACTURAS Y NOTAS DE CRÉDITO
 # =========================
 @app.route("/facturas")
