@@ -102,9 +102,16 @@ app.secret_key = os.environ.get("SECRET_KEY", "clave_secreta_por_defecto")
 
 # ===== CONEXIÓN DB =====
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL no está definida en las variables de entorno")
+
+    real_conn = psycopg2.connect(
+        dsn,
+        sslmode="require",
+        cursor_factory=RealDictCursor
+    )
+    return CompatConnection(real_conn)
 
 # =========================
 # FUNCIONES AUXILIARES CONTABILIDAD
