@@ -1402,6 +1402,35 @@ def toggle_usuario(user_id):
         return jsonify({"success": True, "estado": nuevo_estado})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+@app.route("/schema")
+def schema():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT table_name, ordinal_position, column_name, data_type
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+        ORDER BY table_name, ordinal_position;
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    salida = {}
+    for r in rows:
+        tabla = r["table_name"]
+        if tabla not in salida:
+            salida[tabla] = []
+        salida[tabla].append(f'{r["ordinal_position"]}. {r["column_name"]} ({r["data_type"]})')
+
+    # Mostramos en el navegador de forma simple
+    html = ""
+    for tabla, cols in salida.items():
+        html += f"<h3>Tabla: {tabla}</h3><ul>"
+        for c in cols:
+            html += f"<li>{c}</li>"
+        html += "</ul>"
+    return html
 
 # =========================
 # INICIO
