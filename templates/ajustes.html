@@ -1,39 +1,175 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Ajustes del Sistema</h2>
-  <p>Selecciona una opción:</p>
+  <h2 class="mb-4">👥 Usuarios del Sistema</h2>
 
-  <div class="row g-3">
-    <div class="col-md-4">
-      <a href="{{ url_for('ajustes_usuarios') }}" class="card text-center text-decoration-none p-3 h-100">
-        <div style="font-size:2rem;">👥</div>
-        <div class="card-body">
-          <h5 class="card-title">Usuarios</h5>
-          <p class="card-text">Crear y administrar usuarios y roles</p>
-        </div>
-      </a>
-    </div>
+  <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalAddUser">
+    ➕ Nuevo Usuario
+  </button>
 
-    <div class="col-md-4">
-      <a href="#" class="card text-center text-decoration-none p-3 h-100">
-        <div style="font-size:2rem;">⚙️</div>
-        <div class="card-body">
-          <h5 class="card-title">Configuración</h5>
-          <p class="card-text">Datos de empresa, impuestos, etc.</p>
-        </div>
-      </a>
-    </div>
-
-    <div class="col-md-4">
-      <a href="#" class="card text-center text-decoration-none p-3 h-100">
-        <div style="font-size:2rem;">💾</div>
-        <div class="card-body">
-          <h5 class="card-title">Copias de seguridad</h5>
-          <p class="card-text">Exportar / importar base de datos</p>
-        </div>
-      </a>
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>ID</th>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if usuarios %}
+            {% for u in usuarios %}
+            <tr>
+              <td>{{ u.id }}</td>
+              <td><strong>{{ u.usuario }}</strong></td>
+              <td>
+                <span class="badge {% if u.rol == 'admin' %}bg-danger{% elif u.rol == 'cajero' %}bg-primary{% else %}bg-secondary{% endif %}">
+                  {{ u.rol|upper }}
+                </span>
+              </td>
+              <td>
+                {% if u.activo %}
+                  <span class="badge bg-success">Activo</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactivo</span>
+                {% endif %}
+              </td>
+              <td>
+                <button type="button" class="btn btn-sm btn-warning" onclick="toggleUsuario({{ u.id }})">
+                  {% if u.activo %}
+                    🔒 Desactivar
+                  {% else %}
+                    ✅ Activar
+                  {% endif %}
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">
+                No hay usuarios registrados. Crea el primero haciendo clic en "Nuevo Usuario".
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
+
+<!-- Modal Nuevo Usuario -->
+<div class="modal fade" id="modalAddUser" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formAddUser">
+        <div class="modal-header">
+          <h5 class="modal-title">➕ Nuevo Usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="usuario" class="form-label">Usuario *</label>
+            <input autocomplete="username" type="text" class="form-control" id="usuario" required>
+          </div>
+          <div class="mb-3">
+            <label for="clave" class="form-label">Contraseña *</label>
+            <input autocomplete="new-password" type="password" class="form-control" id="clave" required>
+          </div>
+          <div class="mb-3">
+            <label for="rol" class="form-label">Rol *</label>
+            <select class="form-select" id="rol">
+              <option value="admin">Administrador</option>
+              <option value="cajero" selected>Cajero</option>
+              <option value="auxiliar">Auxiliar</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">💾 Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('formAddUser').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const payload = {
+    usuario: document.getElementById('usuario').value.trim(),
+    clave: document.getElementById('clave').value,
+    rol: document.getElementById('rol').value
+  };
+
+  if (!payload.usuario || !payload.clave) {
+    alert("Usuario y contraseña son requeridos");
+    return;
+  }
+
+  if (payload.usuario.length < 3) {
+    alert("El usuario debe tener al menos 3 caracteres");
+    return;
+  }
+
+  if (payload.clave.length < 4) {
+    alert("La contraseña debe tener al menos 4 caracteres");
+    return;
+  }
+
+  try {
+    const res = await fetch("/ajustes/usuarios/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      const modalEl = document.getElementById('modalAddUser');
+      const modalInstance = bootstrap.Modal.getInstance(modalEl);
+      if (modalInstance) {
+        modalInstance.hide();
+      }
+      
+      alert("✅ Usuario creado correctamente");
+      location.reload();
+      
+    } else {
+      alert("❌ Error: " + (data.error || "Error desconocido"));
+    }
+  } catch (err) {
+    alert("❌ Error de conexión: " + err.message);
+  }
+});
+
+async function toggleUsuario(userId) {
+  if (!confirm("¿Cambiar estado del usuario #" + userId + "?")) return;
+
+  try {
+    const res = await fetch(`/ajustes/usuarios/toggle/${userId}`, { 
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      alert("✅ Estado cambiado correctamente");
+      location.reload();
+    } else {
+      alert("❌ Error: " + (data.error || "desconocido"));
+    }
+  } catch (err) {
+    alert("❌ Error: " + err.message);
+  }
+}
+</script>
 {% endblock %}
