@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">💾 Copias de Seguridad</h2>
+
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+          <h5>📊 Estado de la Base de Datos</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">Información actual del sistema:</p>
+          <div id="stats-container">
+            <button class="btn btn-primary" onclick="cargarEstadisticas()">
+              🔄 Ver Estadísticas
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning">
+          <h5>⚠️ Zona de Peligro</h5>
+        </div>
+        <div class="card-body">
+          <h6>Reiniciar Base de Datos</h6>
+          <p class="text-danger">
+            <strong>¡CUIDADO!</strong> Esta acción:
+          </p>
+          <ul>
+            <li>❌ Borra TODOS los datos</li>
+            <li>❌ Elimina facturas, compras, productos</li>
+            <li>❌ No se puede deshacer</li>
+            <li>✅ Crea datos de ejemplo nuevos</li>
+          </ul>
+          <button class="btn btn-danger w-100" onclick="confirmarReset()">
+            🗑️ Reiniciar Base de Datos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5>📝 Instrucciones</h5>
+        </div>
+        <div class="card-body">
+          <h6>Para hacer una copia de seguridad completa:</h6>
+          <ol>
+            <li>Ve al dashboard de Render</li>
+            <li>Selecciona tu base de datos PostgreSQL</li>
+            <li>Busca la opción "Backups" o "Manual Snapshots"</li>
+            <li>Crea un backup manual</li>
+          </ol>
+          <hr>
+          <h6>Para restaurar desde un backup:</h6>
+          <ol>
+            <li>Ve a Render Dashboard → Tu base de datos</li>
+            <li>Selecciona el backup que quieres restaurar</li>
+            <li>Haz clic en "Restore"</li>
+          </ol>
+          <div class="alert alert-info mt-3">
+            <strong>💡 Consejo:</strong> Haz backups regulares antes de hacer cambios importantes.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function cargarEstadisticas() {
+  const container = document.getElementById('stats-container');
+  container.innerHTML = '<div class="spinner-border" role="status"></div>';
+  
+  try {
+    const res = await fetch("/backup/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      let html = `
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr><th>Tabla</th><th>Registros</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Productos</td><td><strong>${data.stats.productos}</strong></td></tr>
+              <tr><td>Terceros</td><td><strong>${data.stats.terceros}</strong></td></tr>
+              <tr><td>Facturas</td><td><strong>${data.stats.facturas}</strong></td></tr>
+              <tr><td>Compras</td><td><strong>${data.stats.compras}</strong></td></tr>
+              <tr><td>Usuarios</td><td><strong>${data.stats.usuarios}</strong></td></tr>
+              <tr><td>Plan de Cuentas</td><td><strong>${data.stats.puc}</strong></td></tr>
+              <tr><td>Movimientos Contables</td><td><strong>${data.stats.movimientos_contables}</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-muted small">Última consulta: ${data.fecha}</p>
+      `;
+      container.innerHTML = html;
+    } else {
+      container.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="alert alert-danger">Error de conexión: ${err.message}</div>`;
+  }
+}
+
+function confirmarReset() {
+  const confirmacion = prompt(
+    '⚠️ ESTA ACCIÓN BORRARÁ TODO!\n\n' +
+    'Si estás seguro, escribe: BORRAR TODO\n\n' +
+    '(Distingue mayúsculas y minúsculas)'
+  );
+  
+  if (confirmacion === 'BORRAR TODO') {
+    const segundaConfirmacion = confirm(
+      '¿Estás 100% seguro?\n\n' +
+      'Se perderán:\n' +
+      '- Todas las facturas\n' +
+      '- Todos los productos\n' +
+      '- Todos los clientes\n' +
+      '- Todo el historial\n\n' +
+      'Esta acción NO se puede deshacer.'
+    );
+    
+    if (segundaConfirmacion) {
+      resetearBaseDatos();
+    }
+  } else if (confirmacion !== null) {
+    alert('❌ Texto incorrecto. Operación cancelada.');
+  }
+}
+
+async function resetearBaseDatos() {
+  const btnReset = document.querySelector('.btn-danger');
+  btnReset.disabled = true;
+  btnReset.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Reiniciando...';
+  
+  try {
+    const res = await fetch("/backup/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      alert("✅ Base de datos reiniciada correctamente\n\nSe cerrará tu sesión.");
+      window.location.href = "/logout";
+    } else {
+      alert("❌ Error: " + data.error);
+      btnReset.disabled = false;
+      btnReset.innerHTML = '🗑️ Reiniciar Base de Datos';
+    }
+  } catch (err) {
+    alert("❌ Error: " + err.message);
+    btnReset.disabled = false;
+    btnReset.innerHTML = '🗑️ Reiniciar Base de Datos';
+  }
+}
+</script>
+{% endblock %}
