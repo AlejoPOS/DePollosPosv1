@@ -1020,6 +1020,114 @@ def configuracion_save():
             conn.close()
 
 # ======================================================================
+# COPIAS DE SEGURIDAD Y RESET
+# ======================================================================
+
+@app.route("/backup")
+def backup():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
+    if session.get("rol") != "admin":
+        return redirect(url_for("index"))
+    
+    return render_template("backup.html", user=session["user"])
+
+@app.route("/backup/export", methods=["POST"])
+def backup_export():
+    """Exporta información básica de la base de datos"""
+    if "user" not in session or session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Contar registros
+        stats = {}
+        tablas = ['productos', 'terceros', 'facturas', 'compras', 'usuarios', 'puc', 'movimientos_contables']
+        
+        for tabla in tablas:
+            cur.execute(f"SELECT COUNT(*) as total FROM {tabla}")
+            stats[tabla] = cur.fetchone()["total"]
+        
+        return jsonify({
+            "success": True, 
+            "stats": stats,
+            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/backup/reset", methods=["POST"])
+def backup_reset():
+    """Reinicia completamente la base de datos"""
+    if "user" not in session or session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Borrar esquema
+        cur.execute("DROP SCHEMA public CASCADE")
+        cur.execute("CREATE SCHEMA public")
+        conn.commit()
+        
+        # Recrear tablas
+        from init_db_postgres import schema
+        cur.execute(schema)
+        conn.commit()
+        
+        # Inicializar PUC
+        cuentas_basicas = [
+            ("1105", "Caja", "activo"), ("1110", "Bancos", "activo"), ("1305", "Clientes", "activo"),
+            ("1435", "Inventario de Mercancías", "activo"), ("1540", "Equipo de Oficina", "activo"),
+            ("2205", "Proveedores", "pasivo"), ("2365", "Retención en la Fuente", "pasivo"),
+            ("2404", "IVA por Pagar", "pasivo"), ("3105", "Capital Social", "patrimonio"),
+            ("3605", "Utilidades Retenidas", "patrimonio"), ("4135", "Comercio al por Mayor y al Detal", "ingreso"),
+            ("4175", "Devoluciones en Ventas", "ingreso"), ("4199", "Otros Ingresos", "ingreso"),
+            ("5105", "Gastos de Personal", "gasto"), ("5135", "Servicios", "gasto"),
+            ("5140", "Gastos Legales", "gasto"), ("5195", "Diversos", "gasto"),
+            ("6135", "Comercio al por Mayor y al Detal", "gasto")
+        ]
+        
+        for codigo, nombre, tipo in cuentas_basicas:
+            cur.execute("INSERT INTO puc (codigo, nombre, tipo) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", 
+                       (codigo, nombre, tipo))
+        
+        # Datos de ejemplo
+        cur.execute("INSERT INTO terceros (nombres, apellidos, tipo) VALUES ('Cliente', 'General', 'Cliente')")
+        cur.execute("INSERT INTO terceros (nombres, apellidos, tipo) VALUES ('Proveedor', 'Principal', 'Proveedor')")
+        
+        productos_ejemplo = [
+            ("Pollo Entero", "Pollo entero fresco", 8500, 12000, 50),
+            ("Pechuga (Kg)", "Pechuga de pollo por kilogramo", 15000, 22000, 30),
+            ("Muslos (Kg)", "Muslos de pollo por kilogramo", 12000, 18000, 25),
+            ("Alitas (Kg)", "Alitas de pollo por kilogramo", 10000, 16000, 20),
+        ]
+        
+        for nombre, descripcion, costo, precio, stock in productos_ejemplo:
+            cur.execute("INSERT INTO productos (nombre, descripcion, costo, precio, stock) VALUES (%s, %s, %s, %s, %s)", 
+                       (nombre, descripcion, costo, precio, stock))
+        
+        conn.commit()
+        
+        return jsonify({"success": True, "mensaje": "Base de datos reiniciada correctamente"})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+# ======================================================================
 # INICIO
 # ======================================================================
 
