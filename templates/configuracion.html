@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">⚙️ Configuración del Sistema</h2>
+
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5>🏢 Información de la Empresa</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Nombre de la Empresa</label>
+            <input type="text" class="form-control" id="empresa_nombre" value="{{ config.get('empresa_nombre', '') }}">
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">NIT</label>
+              <input type="text" class="form-control" id="empresa_nit" value="{{ config.get('empresa_nit', '') }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Teléfono</label>
+              <input type="text" class="form-control" id="empresa_telefono" value="{{ config.get('empresa_telefono', '') }}">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Dirección</label>
+            <input type="text" class="form-control" id="empresa_direccion" value="{{ config.get('empresa_direccion', '') }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="empresa_email" value="{{ config.get('empresa_email', '') }}">
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5>💰 Configuración Financiera</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">IVA (%)</label>
+              <input type="number" class="form-control" id="iva_porcentaje" value="{{ config.get('iva_porcentaje', '19') }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Moneda</label>
+              <select class="form-control" id="moneda">
+                <option value="COP" {% if config.get('moneda') == 'COP' %}selected{% endif %}>COP - Peso Colombiano</option>
+                <option value="USD" {% if config.get('moneda') == 'USD' %}selected{% endif %}>USD - Dólar</option>
+                <option value="EUR" {% if config.get('moneda') == 'EUR' %}selected{% endif %}>EUR - Euro</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-success btn-lg w-100" onclick="guardarConfiguracion()">
+        💾 Guardar Configuración
+      </button>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          <h5>ℹ️ Información del Sistema</h5>
+        </div>
+        <div class="card-body">
+          <p><strong>Versión:</strong> 1.0.0</p>
+          <p><strong>Base de datos:</strong> PostgreSQL</p>
+          <p><strong>Usuario actual:</strong> {{ user }}</p>
+          <hr>
+          <p class="text-muted small">
+            Esta configuración afecta cómo se muestran los datos en facturas, reportes y documentos del sistema.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function guardarConfiguracion() {
+  const config = {
+    empresa_nombre: document.getElementById('empresa_nombre').value,
+    empresa_nit: document.getElementById('empresa_nit').value,
+    empresa_telefono: document.getElementById('empresa_telefono').value,
+    empresa_direccion: document.getElementById('empresa_direccion').value,
+    empresa_email: document.getElementById('empresa_email').value,
+    iva_porcentaje: document.getElementById('iva_porcentaje').value,
+    moneda: document.getElementById('moneda').value
+  };
+
+  try {
+    const res = await fetch("/configuracion/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert("✅ Configuración guardada correctamente");
+    } else {
+      alert("❌ Error: " + data.error);
+    }
+  } catch (err) {
+    alert("❌ Error de conexión: " + err.message);
+  }
+}
+</script>
+{% endblock %}
