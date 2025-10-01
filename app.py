@@ -759,6 +759,89 @@ def transformaciones():
         conn.close()
     return render_template("transformaciones.html", user=session["user"], productos=productos, transformaciones=transformaciones, fecha_hoy=datetime.now().strftime("%Y-%m-%d"))
 
+@app.route("/transformaciones/save", methods=["POST"])
+def save_transformacion():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+
+    conn = None
+    try:
+        data = request.get_json() or {}
+        fecha = data.get("fecha") or datetime.now().strftime("%Y-%m-%d")
+        descripcion = data.get("descripcion", "")
+        salidas = data.get("salidas", [])
+        entradas = data.get("entradas", [])
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Consecutivo automático
+        cur.execute("SELECT COALESCE(MAX(numero), 0) + 1 AS next_num FROM transformaciones")
+        numero = cur.fetchone()["next_num"]
+
+        # Insertar cabecera
+        cur.execute("""
+            INSERT INTO transformaciones (numero, fecha, descripcion, total_salida, total_entrada, creado_por)
+            VALUES (%s, %s, %s, 0, 0, %s) RETURNING id
+        """, (numero, fecha, descripcion, session["user"]))
+        
+        trans_id = cur.fetchone()["id"]
+        total_salida = 0.0
+        total_entrada = 0.0
+
+        # Procesar salidas
+        for s in salidas:
+            pid = int(s.get("producto_id"))
+            cant = float(s.get("cantidad") or 0)
+            if cant <= 0:
+                continue
+            
+            cur.execute("SELECT costo FROM productos WHERE id=%s", (pid,))
+            prod = cur.fetchone()
+            costo_unit = float(prod["costo"]) if prod else 0.0
+            total = cant * costo_unit
+            total_salida += total
+
+            cur.execute("""
+                INSERT INTO detalle_transformacion (transformacion_id, tipo, producto_id, cantidad, costo, total)
+                VALUES (%s, 'salida', %s, %s, %s, %s)
+            """, (trans_id, pid, cant, costo_unit, total))
+            
+            cur.execute("UPDATE productos SET stock = stock - %s WHERE id=%s", (cant, pid))
+
+        # Procesar entradas
+        for e in entradas:
+            pid = int(e.get("producto_id"))
+            cant = float(e.get("cantidad") or 0)
+            costo_unit = float(e.get("costo") or 0)
+            if cant <= 0:
+                continue
+            total = cant * costo_unit
+            total_entrada += total
+
+            cur.execute("""
+                INSERT INTO detalle_transformacion (transformacion_id, tipo, producto_id, cantidad, costo, total)
+                VALUES (%s, 'entrada', %s, %s, %s, %s)
+            """, (trans_id, pid, cant, costo_unit, total))
+            
+            cur.execute("UPDATE productos SET stock = stock + %s, costo = %s WHERE id=%s", (cant, costo_unit, pid))
+
+        # Actualizar totales
+        cur.execute("UPDATE transformaciones SET total_salida=%s, total_entrada=%s WHERE id=%s",
+                    (total_salida, total_entrada, trans_id))
+
+        conn.commit()
+
+        return jsonify({"success": True, "mensaje": f"Transformación #{numero} registrada"})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error save_transformacion: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
 @app.route("/recibo_caja")
 def recibo_caja():
     if "user" not in session:
