@@ -146,6 +146,92 @@ def crear_asiento_nota_credito(nota_id):
         if conn:
             conn.close()
 
+def crear_asiento_recibo(recibo_id):
+    """Crea asiento contable para recibo de caja"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT numero, fecha, valor, concepto FROM recibos_caja WHERE id = %s", (recibo_id,))
+        recibo = cur.fetchone()
+        if not recibo:
+            return
+            
+        fecha, valor = recibo["fecha"], recibo["valor"]
+        descripcion = f"Recibo de Caja #{recibo['numero']} - {recibo['concepto'] or ''}"
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+        caja = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '4199'")
+        ingreso = cur.fetchone()
+        
+        if caja and ingreso:
+            # Débito: Caja
+            cur.execute("""
+                INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
+                VALUES (%s, %s, %s, %s, 0, 'recibo_caja', %s)
+            """, (fecha, caja["id"], descripcion, valor, recibo_id))
+            
+            # Crédito: Otros Ingresos
+            cur.execute("""
+                INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
+                VALUES (%s, %s, %s, 0, %s, 'recibo_caja', %s)
+            """, (fecha, ingreso["id"], descripcion, valor, recibo_id))
+        
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error asiento recibo: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def crear_asiento_egreso(egreso_id):
+    """Crea asiento contable para comprobante de egreso"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT numero, fecha, valor, concepto FROM comprobantes_egreso WHERE id = %s", (egreso_id,))
+        egreso = cur.fetchone()
+        if not egreso:
+            return
+            
+        fecha, valor = egreso["fecha"], egreso["valor"]
+        descripcion = f"Comprobante Egreso #{egreso['numero']} - {egreso['concepto'] or ''}"
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '1105'")
+        caja = cur.fetchone()
+        
+        cur.execute("SELECT id FROM puc WHERE codigo = '5195'")
+        gasto = cur.fetchone()
+        
+        if caja and gasto:
+            # Débito: Gastos Diversos
+            cur.execute("""
+                INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
+                VALUES (%s, %s, %s, %s, 0, 'egreso', %s)
+            """, (fecha, gasto["id"], descripcion, valor, egreso_id))
+            
+            # Crédito: Caja
+            cur.execute("""
+                INSERT INTO movimientos_contables (fecha, cuenta_id, descripcion, debito, credito, modulo, referencia_id)
+                VALUES (%s, %s, %s, 0, %s, 'egreso', %s)
+            """, (fecha, caja["id"], descripcion, valor, egreso_id))
+        
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error asiento egreso: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 # ======================================================================
 # CONFIGURACIÓN FLASK
 # ======================================================================
