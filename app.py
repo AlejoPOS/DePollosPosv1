@@ -953,6 +953,71 @@ def toggle_usuario(user_id):
     finally:
         if conn:
             conn.close()
+# ======================================================================
+# CONFIGURACIÓN DEL SISTEMA
+# ======================================================================
+
+@app.route("/configuracion")
+def configuracion():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT clave, valor FROM configuracion ORDER BY clave")
+        config = {r["clave"]: r["valor"] for r in cur.fetchall()}
+    except:
+        config = {}
+    conn.close()
+    
+    # Valores por defecto si no existen
+    defaults = {
+        "empresa_nombre": "De Pollos POS",
+        "empresa_nit": "",
+        "empresa_telefono": "",
+        "empresa_direccion": "",
+        "empresa_email": "",
+        "iva_porcentaje": "19",
+        "moneda": "COP"
+    }
+    
+    for key, val in defaults.items():
+        if key not in config:
+            config[key] = val
+    
+    return render_template("configuracion.html", user=session["user"], config=config)
+
+@app.route("/configuracion/save", methods=["POST"])
+def configuracion_save():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    if session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "Solo administradores"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        for clave, valor in data.items():
+            cur.execute("""
+                INSERT INTO configuracion (clave, valor) 
+                VALUES (%s, %s)
+                ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor
+            """, (clave, valor))
+        
+        conn.commit()
+        return jsonify({"success": True, "mensaje": "Configuración guardada"})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # ======================================================================
 # INICIO
