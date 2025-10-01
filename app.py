@@ -859,6 +859,69 @@ def recibo_caja():
     conn.close()
     return render_template("recibo_caja.html", user=session["user"], clientes=terceros, numero=last_num + 1, fecha=datetime.now().strftime("%Y-%m-%d"))
 
+@app.route("/recibo_caja/save", methods=["POST"])
+def recibo_caja_save():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO recibos_caja (numero, fecha, tercero_id, concepto, valor) 
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (data.get("numero"), data.get("fecha") or datetime.now().strftime("%Y-%m-%d"),
+              data.get("tercero_id"), data.get("concepto"), float(data.get("valor"))))
+        
+        result = cur.fetchone()
+        recibo_id = result["id"]
+        
+        conn.commit()
+        
+        # Crear asiento contable
+        crear_asiento_recibo(recibo_id)
+        
+        return jsonify({"success": True, "recibo_num": data.get("numero")})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en recibo_caja_save: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/recibos/lista", methods=["POST"])
+def api_recibos_lista():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT r.id, r.numero, r.fecha, r.concepto, r.valor,
+                   t.nombres || ' ' || COALESCE(t.apellidos,'') AS tercero
+            FROM recibos_caja r
+            LEFT JOIN terceros t ON r.tercero_id = t.id
+            WHERE r.fecha BETWEEN %s AND %s
+            ORDER BY r.fecha DESC, r.numero DESC
+        """, (data.get("fecha_inicio"), data.get("fecha_fin")))
+        recibos = cur.fetchall()
+        
+        return jsonify({"success": True, "recibos": [dict(r) for r in recibos]})
+    except Exception as e:
+        print(f"Error en api_recibos_lista: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
 @app.route("/comprobante_egreso")
 def comprobante_egreso():
     if "user" not in session:
@@ -875,6 +938,69 @@ def comprobante_egreso():
         terceros, last_num = [], 0
     conn.close()
     return render_template("comprobante_egreso.html", user=session["user"], terceros=terceros, numero=last_num + 1, fecha=datetime.now().strftime("%Y-%m-%d"))
+
+@app.route("/comprobante_egreso/save", methods=["POST"])
+def comprobante_egreso_save():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO comprobantes_egreso (numero, fecha, tercero_id, concepto, valor)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (data.get("numero"), data.get("fecha") or datetime.now().strftime("%Y-%m-%d"),
+              data.get("tercero_id"), data.get("concepto"), float(data.get("valor"))))
+        
+        result = cur.fetchone()
+        egreso_id = result["id"]
+        
+        conn.commit()
+        
+        # Crear asiento contable
+        crear_asiento_egreso(egreso_id)
+        
+        return jsonify({"success": True, "egreso_num": data.get("numero")})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error en comprobante_egreso_save: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/egresos/lista", methods=["POST"])
+def api_egresos_lista():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT e.id, e.numero, e.fecha, e.concepto, e.valor,
+                   t.nombres || ' ' || COALESCE(t.apellidos,'') AS tercero
+            FROM comprobantes_egreso e
+            LEFT JOIN terceros t ON e.tercero_id = t.id
+            WHERE e.fecha BETWEEN %s AND %s
+            ORDER BY e.fecha DESC, e.numero DESC
+        """, (data.get("fecha_inicio"), data.get("fecha_fin")))
+        egresos = cur.fetchall()
+        
+        return jsonify({"success": True, "egresos": [dict(e) for e in egresos]})
+    except Exception as e:
+        print(f"Error en api_egresos_lista: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # ======================================================================
 # AJUSTES Y USUARIOS
