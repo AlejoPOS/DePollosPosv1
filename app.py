@@ -557,6 +557,90 @@ def add_producto():
         if conn:
             conn.close()
 
+@app.route("/update_producto/<int:id>", methods=["PUT"])
+def update_producto(id):
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+    
+    conn = None
+    try:
+        data = request.get_json()
+        nombre = data.get("nombre", "").strip()
+        stock = float(data.get("stock", 0))
+        costo = float(data.get("costo", 0))
+        precio = float(data.get("precio", 0))
+        
+        if not nombre:
+            return jsonify({"success": False, "error": "Nombre requerido"})
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id FROM productos WHERE id = %s", (id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Producto no encontrado"})
+        
+        cur.execute("""
+            UPDATE productos 
+            SET nombre = %s, stock = %s, costo = %s, precio = %s 
+            WHERE id = %s
+        """, (nombre, stock, costo, precio, id))
+        
+        conn.commit()
+        return jsonify({"success": True, "mensaje": f"Producto '{nombre}' actualizado"})
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error update_producto: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/delete_producto/<int:id>", methods=["DELETE"])
+def delete_producto(id):
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT nombre FROM productos WHERE id = %s", (id,))
+        producto = cur.fetchone()
+        
+        if not producto:
+            return jsonify({"success": False, "error": "Producto no encontrado"})
+        
+        cur.execute("SELECT COUNT(*) as total FROM detalle_factura WHERE producto_id = %s", (id,))
+        en_facturas = cur.fetchone()["total"]
+        
+        cur.execute("SELECT COUNT(*) as total FROM detalle_compra WHERE producto_id = %s", (id,))
+        en_compras = cur.fetchone()["total"]
+        
+        if en_facturas > 0 or en_compras > 0:
+            return jsonify({
+                "success": False, 
+                "error": "No se puede eliminar. El producto está siendo usado en facturas o compras."
+            })
+        
+        cur.execute("DELETE FROM productos WHERE id = %s", (id,))
+        conn.commit()
+        
+        return jsonify({"success": True, "mensaje": f"Producto '{producto['nombre']}' eliminado"})
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error delete_producto: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
 # ======================================================================
 # TERCEROS
 # ======================================================================
