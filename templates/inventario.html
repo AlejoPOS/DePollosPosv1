@@ -6,11 +6,9 @@
         <p class="text-muted mb-0">Lista de productos disponibles</p>
     </div>
     <div class="d-flex gap-2">
-       <div class="d-flex gap-2">
-    <a href="{{ url_for('transformaciones') }}" class="btn btn-warning">🔄 Transformaciones</a>
-    <button class="btn btn-outline-primary" onclick="toggleStats()">📊 Estadísticas</button>
-    <button class="btn btn-success" onclick="toggleFormProducto()">➕ Nuevo Producto</button>
-</div>
+        <a href="{{ url_for('transformaciones') }}" class="btn btn-warning">🔄 Transformaciones</a>
+        <button class="btn btn-outline-primary" onclick="toggleStats()">📊 Estadísticas</button>
+        <button class="btn btn-success" onclick="toggleFormProducto()">➕ Nuevo Producto</button>
     </div>
 </div>
 
@@ -111,7 +109,7 @@
             </thead>
             <tbody>
                 {% for p in productos %}
-                <tr data-producto='{{ p | tojson }}'>
+                <tr data-producto-id="{{ p['id'] }}">
                     <td><strong>{{ p["nombre"] }}</strong></td>
                     <td>
                         <span class="badge {% if p['stock'] <= 0 %}bg-danger{% elif p['stock'] <= 10 %}bg-warning{% elif p['stock'] <= 50 %}bg-info{% else %}bg-success{% endif %}">
@@ -133,8 +131,8 @@
                         {% endif %}
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="editarProducto({{ p['id'] }})">✏️</button>
-                        <button class="btn btn-sm btn-outline-info" onclick="verDetalles('{{ p['nombre'] }}', {{ p['stock'] }}, {{ p['costo'] }}, {{ p['precio'] }})">👁️</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick='editarProducto({{ p["id"] }}, "{{ p["nombre"] }}", {{ p["stock"] }}, {{ p["costo"] }}, {{ p["precio"] }})'>✏️ Editar</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="eliminarProducto({{ p['id'] }}, '{{ p['nombre'] }}')">🗑️</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -147,16 +145,36 @@
     <small>Total de registros: <span id="total-registros">{{ productos|length }}</span></small>
 </div>
 
-<div class="modal fade" id="modalDetalles" tabindex="-1">
+<!-- Modal Editar Producto -->
+<div class="modal fade" id="modalEditarProducto" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">📦 Detalles del Producto</h5>
+                <h5 class="modal-title">✏️ Editar Producto</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="detalles-contenido"></div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_producto_id">
+                <div class="mb-3">
+                    <label class="form-label">Nombre del Producto *</label>
+                    <input type="text" class="form-control" id="edit_nombre" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Stock *</label>
+                    <input type="number" class="form-control" id="edit_stock" min="0" step="0.01" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Costo *</label>
+                    <input type="number" class="form-control" id="edit_costo" min="0" step="0.01" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Precio de Venta *</label>
+                    <input type="number" class="form-control" id="edit_precio" min="0" step="0.01" required>
+                </div>
+            </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarEdicion()">💾 Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -164,7 +182,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+let modalEditar;
+
 document.addEventListener('DOMContentLoaded', function(){
+    modalEditar = new bootstrap.Modal(document.getElementById('modalEditarProducto'));
     actualizarEstadisticas();
     configurarFiltros();
 });
@@ -249,27 +270,7 @@ function actualizarEstadisticas(){
     document.getElementById('valor-inventario').textContent='$'+valor.toFixed(2);
 }
 
-// DETALLES
-function verDetalles(nombre, stock, costo, precio){
-    let estado='', cls='';
-    if(stock<=0){ estado='Agotado'; cls='danger'; }
-    else if(stock<=10){ estado='Stock Bajo'; cls='warning'; }
-    else if(stock<=50){ estado='Stock Medio'; cls='info'; }
-    else { estado='Stock Alto'; cls='success'; }
-    const contenido=`
-    <div class="row">
-        <div class="col-12"><h4>${nombre}</h4><hr></div>
-        <div class="col-6"><strong>Stock Actual:</strong><br><span class="badge bg-${cls} fs-6">${stock}</span></div>
-        <div class="col-6"><strong>Estado:</strong><br><span class="badge bg-${cls} fs-6">${estado}</span></div>
-        <div class="col-6 mt-3"><strong>Costo Unitario:</strong><br>$${costo.toFixed(2)}</div>
-        <div class="col-6 mt-3"><strong>Precio de Venta:</strong><br>$${precio.toFixed(2)}</div>
-        <div class="col-6 mt-3"><strong>Valor Total (a Costo):</strong><br>$${(stock*costo).toFixed(2)}</div>
-    </div>`;
-    document.getElementById('detalles-contenido').innerHTML=contenido;
-    new bootstrap.Modal(document.getElementById('modalDetalles')).show();
-}
-
-// FORMULARIO EN LÍNEA
+// NUEVO PRODUCTO
 function toggleFormProducto() {
     const form = document.getElementById("form-nuevo-producto");
     form.style.display = (form.style.display === 'none') ? 'block' : 'none';
@@ -286,12 +287,7 @@ async function guardarProducto() {
         return;
     }
 
-    const payload = {
-        nombre: nombre,
-        stock: stock,
-        costo: costo,
-        precio: precio
-    };
+    const payload = { nombre, stock, costo, precio };
 
     try {
         const res = await fetch("{{ url_for('add_producto') }}", {
@@ -301,44 +297,80 @@ async function guardarProducto() {
         });
         const data = await res.json();
         if (data.success) {
-            alert(`Producto "${nombre}" agregado con éxito.`);
-            document.getElementById("form-nuevo-producto").style.display = 'none';
-            document.getElementById("form-nuevo-producto").querySelectorAll("input").forEach(i => i.value = '');
+            alert(`✅ Producto "${nombre}" agregado con éxito.`);
             location.reload();
         } else {
-            alert("Error: " + data.error);
+            alert("❌ Error: " + data.error);
         }
     } catch (err) {
-        alert("Error de conexión: " + err.message);
+        alert("❌ Error de conexión: " + err.message);
     }
 }
 
-// EDITAR PRODUCTO (MODAL)
-function editarProducto(id){
-    const filas=Array.from(document.querySelectorAll('#tabla-inventario tbody tr'));
-    const producto=filas.map(f=>JSON.parse(f.getAttribute('data-producto'))).find(p=>p.id===id);
-    if(!producto){ alert('Producto no encontrado'); return; }
+// EDITAR PRODUCTO
+function editarProducto(id, nombre, stock, costo, precio) {
+    document.getElementById('edit_producto_id').value = id;
+    document.getElementById('edit_nombre').value = nombre;
+    document.getElementById('edit_stock').value = stock;
+    document.getElementById('edit_costo').value = costo;
+    document.getElementById('edit_precio').value = precio;
+    modalEditar.show();
+}
 
-    const modal=document.getElementById('modalProducto');
-    modal.querySelector('.modal-title').textContent='✏️ Editar Producto';
-    modal.querySelector('#nuevo-nombre').value=producto.nombre;
-    modal.querySelector('#nuevo-stock').value=producto.stock;
-    modal.querySelector('#nuevo-costo').value=producto.costo;
-    modal.querySelector('#nuevo-precio').value=producto.precio;
+async function guardarEdicion() {
+    const id = document.getElementById('edit_producto_id').value;
+    const nombre = document.getElementById('edit_nombre').value.trim();
+    const stock = document.getElementById('edit_stock').value;
+    const costo = document.getElementById('edit_costo').value;
+    const precio = document.getElementById('edit_precio').value;
 
-    modal.querySelector('button.btn-success').onclick=function(){
-        const nombre=modal.querySelector('#nuevo-nombre').value.trim();
-        const stock=parseInt(modal.querySelector('#nuevo-stock').value)||0;
-        const costo=parseFloat(modal.querySelector('#nuevo-costo').value)||0;
-        const precio=parseFloat(modal.querySelector('#nuevo-precio').value)||0;
-        if(!nombre){ alert('Nombre requerido'); return; }
-
-        // Aquí iría el POST/PUT al backend
-        alert(`Producto "${nombre}" actualizado\nStock: ${stock}\nCosto: $${costo.toFixed(2)}\nPrecio: $${precio.toFixed(2)}`);
-        bootstrap.Modal.getInstance(modal).hide();
+    if (!nombre || !stock || !costo || !precio) {
+        alert('Todos los campos son obligatorios.');
+        return;
     }
 
-    new bootstrap.Modal(modal).show();
+    const payload = { nombre, stock, costo, precio };
+
+    try {
+        const res = await fetch(`/update_producto/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`✅ Producto actualizado correctamente`);
+            modalEditar.hide();
+            location.reload();
+        } else {
+            alert("❌ Error: " + data.error);
+        }
+    } catch (err) {
+        alert("❌ Error de conexión: " + err.message);
+    }
+}
+
+// ELIMINAR PRODUCTO
+async function eliminarProducto(id, nombre) {
+    if (!confirm(`¿Eliminar el producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/delete_producto/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`✅ Producto "${nombre}" eliminado correctamente`);
+            location.reload();
+        } else {
+            alert("❌ Error: " + data.error);
+        }
+    } catch (err) {
+        alert("❌ Error de conexión: " + err.message);
+    }
 }
 </script>
 
