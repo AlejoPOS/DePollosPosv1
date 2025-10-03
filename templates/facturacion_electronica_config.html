@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">⚙️ Configuración Facturación Electrónica DIAN</h2>
+
+  {% if not es_valido %}
+  <div class="alert alert-warning">
+    <h5>⚠️ Configuración Incompleta</h5>
+    <p>Completa los siguientes campos obligatorios:</p>
+    <ul>
+      {% for error in errores %}
+      <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <div class="alert alert-success">
+    <h5>✅ Configuración Completa</h5>
+    <p>El sistema está listo para generar facturas con CUFE.</p>
+  </div>
+  {% endif %}
+
+  <!-- Tabs de configuración -->
+  <ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" data-bs-toggle="tab" href="#empresa">🏢 Empresa</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#dian">📜 Resolución DIAN</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#pruebas">🧪 Pruebas</a>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    <!-- Tab 1: Datos de Empresa -->
+    <div id="empresa" class="tab-pane fade show active">
+      <div class="card">
+        <div class="card-header">
+          <h5>Información del Emisor (Tu Empresa)</h5>
+        </div>
+        <div class="card-body">
+          <form id="formEmpresa">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">NIT *</label>
+                <input type="text" class="form-control" id="empresa_nit" 
+                       value="{{ config.get('empresa_nit', '') }}" 
+                       placeholder="900123456">
+                <small class="text-muted">Sin dígito de verificación</small>
+              </div>
+              <div class="col-md-2 mb-3">
+                <label class="form-label">DV *</label>
+                <input type="text" class="form-control" id="empresa_digito_verificacion" 
+                       value="{{ config.get('empresa_digito_verificacion', '') }}"
+                       maxlength="1">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Tipo Organización *</label>
+                <select class="form-control" id="empresa_tipo_persona">
+                  <option value="1" {% if config.get('empresa_tipo_persona') == '1' %}selected{% endif %}>Persona Jurídica</option>
+                  <option value="2" {% if config.get('empresa_tipo_persona') == '2' %}selected{% endif %}>Persona Natural</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Razón Social *</label>
+                <input type="text" class="form-control" id="empresa_nombre" 
+                       value="{{ config.get('empresa_nombre', '') }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Nombre Comercial</label>
+                <input type="text" class="form-control" id="empresa_nombre_comercial" 
+                       value="{{ config.get('empresa_nombre_comercial', '') }}">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Dirección *</label>
+                <input type="text" class="form-control" id="empresa_direccion" 
+                       value="{{ config.get('empresa_direccion', '') }}"
+                       placeholder="Calle 123 #45-67">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Código Postal</label>
+                <input type="text" class="form-control" id="empresa_codigo_postal" 
+                       value="{{ config.get('empresa_codigo_postal', '') }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Teléfono *</label>
+                <input type="text" class="form-control" id="empresa_telefono" 
+                       value="{{ config.get('empresa_telefono', '') }}">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Municipio *</label>
+                <input type="text" class="form-control" id="empresa_municipio_nombre" 
+                       value="{{ config.get('empresa_municipio_nombre', '') }}">
+              </div>
+              <div class="col-md-2 mb-3">
+                <label class="form-label">Código Municipio *</label>
+                <input type="text" class="form-control" id="empresa_municipio_codigo" 
+                       value="{{ config.get('empresa_municipio_codigo', '11001') }}"
+                       placeholder="11001">
+                <small class="text-muted">Ej: 11001 (Bogotá)</small>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Departamento *</label>
+                <input type="text" class="form-control" id="empresa_departamento_nombre" 
+                       value="{{ config.get('empresa_departamento_nombre', '') }}">
+              </div>
+              <div class="col-md-2 mb-3">
+                <label class="form-label">Código Depto *</label>
+                <input type="text" class="form-control" id="empresa_departamento_codigo" 
+                       value="{{ config.get('empresa_departamento_codigo', '11') }}"
+                       placeholder="11">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Email *</label>
+                <input type="email" class="form-control" id="empresa_email" 
+                       value="{{ config.get('empresa_email', '') }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Régimen Fiscal *</label>
+                <select class="form-control" id="empresa_regimen">
+                  <option value="48" {% if config.get('empresa_regimen') == '48' %}selected{% endif %}>Responsable de IVA</option>
+                  <option value="49" {% if config.get('empresa_regimen') == '49' %}selected{% endif %}>Régimen Simple</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Responsabilidades Fiscales</label>
+              <select class="form-control" id="empresa_responsabilidad_fiscal" multiple size="4">
+                <option value="O-13">O-13 - Gran contribuyente</option>
+                <option value="O-15">O-15 - Autorretenedor</option>
+                <option value="O-23">O-23 - Agente retención IVA</option>
+                <option value="O-47">O-47 - Régimen simple de tributación</option>
+                <option value="R-99-PN">R-99-PN - No aplica</option>
+              </select>
+              <small class="text-muted">Mantén presionado Ctrl (Windows) o Cmd (Mac) para seleccionar múltiples</small>
+            </div>
+
+            <button type="button" class="btn btn-success" onclick="guardarEmpresa()">💾 Guardar Datos Empresa</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Resolución DIAN -->
+    <div id="dian" class="tab-pane fade">
+      <div class="card">
+        <div class="card-header">
+          <h5>Numeración Autorizada DIAN</h5>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info">
+            <strong>ℹ️ Importante:</strong> Estos datos deben coincidir con tu resolución de habilitación DIAN.
+            Si aún no tienes resolución, puedes usar valores de prueba.
+          </div>
+
+          <form id="formDIAN">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Número de Resolución *</label>
+                <input type="text" class="form-control" id="dian_resolucion_numero" 
+                       value="{{ config.get('dian_resolucion_numero', '') }}"
+                       placeholder="18764000000001">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Fecha de Resolución *</label>
+                <input type="date" class="form-control" id="dian_resolucion_fecha" 
+                       value="{{ config.get('dian_resolucion_fecha', '') }}">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Prefijo *</label>
+                <input type="text" class="form-control" id="dian_prefijo" 
+                       value="{{ config.get('dian_prefijo', 'SETT') }}"
+                       placeholder="SETT">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Rango Desde *</label>
+                <input type="number" class="form-control" id="dian_rango_desde" 
+                       value="{{ config.get('dian_rango_desde', '1') }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Rango Hasta *</label>
+                <input type="number" class="form-control" id="dian_rango_hasta" 
+                       value="{{ config.get('dian_rango_hasta', '5000') }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label">Consecutivo Actual</label>
+                <input type="number" class="form-control" id="consecutivo_actual" readonly
+                       value="{{ config.get('consecutivo_actual', '0') }}">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Vigencia Desde</label>
+                <input type="date" class="form-control" id="dian_vigencia_desde" 
+                       value="{{ config.get('dian_vigencia_desde', '') }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Vigencia Hasta</label>
+                <input type="date" class="form-control" id="dian_vigencia_hasta" 
+                       value="{{ config.get('dian_vigencia_hasta', '') }}">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Clave Técnica *</label>
+              <input type="text" class="form-control" id="dian_clave_tecnica" 
+                     value="{{ config.get('dian_clave_tecnica', '') }}"
+                     placeholder="Clave asignada por DIAN">
+              <small class="text-muted">Para pruebas, usa cualquier texto. Para producción, usa la clave asignada por DIAN.</small>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Ambiente *</label>
+                <select class="form-control" id="dian_ambiente">
+                  <option value="2" {% if config.get('dian_ambiente') == '2' %}selected{% endif %}>Habilitación (Pruebas)</option>
+                  <option value="1" {% if config.get('dian_ambiente') == '1' %}selected{% endif %}>Producción</option>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Tipo de Operación</label>
+                <select class="form-control" id="dian_tipo_operacion">
+                  <option value="10" {% if config.get('dian_tipo_operacion') == '10' %}selected{% endif %}>10 - Estándar</option>
+                  <option value="20">20 - AIU</option>
+                  <option value="22">22 - Mandatos</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-success" onclick="guardarDIAN()">💾 Guardar Configuración DIAN</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Pruebas -->
+    <div id="pruebas" class="tab-pane fade">
+      <div class="card">
+        <div class="card-header">
+          <h5>🧪 Pruebas y Validación</h5>
+        </div>
+        <div class="card-body">
+          <h6>Prueba de Generación de CUFE</h6>
+          <p>Genera un CUFE de prueba para validar la configuración:</p>
+          
+          <button class="btn btn-primary mb-3" onclick="generarCUFEPrueba()">
+            🔄 Generar CUFE de Prueba
+          </button>
+
+          <div id="resultado-prueba" style="display:none;" class="alert alert-success">
+            <h6>✅ CUFE Generado:</h6>
+            <code id="cufe-resultado"></code>
+            <hr>
+            <h6>Datos QR:</h6>
+            <pre id="qr-resultado"></pre>
+          </div>
+
+          <hr class="my-4">
+
+          <h6>Validación de NIT</h6>
+          <div class="row">
+            <div class="col-md-8">
+              <input type="text" class="form-control" id="nit-validar" placeholder="Ingresa un NIT para validar">
+            </div>
+            <div class="col-md-4">
+              <button class="btn btn-info w-100" onclick="validarNIT()">Validar NIT</button>
+            </div>
+          </div>
+          <div id="resultado-nit" class="mt-3"></div>
+
+          <hr class="my-4">
+
+          <h6>Estado del Sistema</h6>
+          <table class="table table-sm">
+            <tr>
+              <td><strong>Configuración empresa:</strong></td>
+              <td>{% if config.get('empresa_nit') %}<span class="badge bg-success">✅ OK</span>{% else %}<span class="badge bg-danger">❌ Pendiente</span>{% endif %}</td>
+            </tr>
+            <tr>
+              <td><strong>Resolución DIAN:</strong></td>
+              <td>{% if config.get('dian_resolucion_numero') %}<span class="badge bg-success">✅ OK</span>{% else %}<span class="badge bg-danger">❌ Pendiente</span>{% endif %}</td>
+            </tr>
+            <tr>
+              <td><strong>Clave técnica:</strong></td>
+              <td>{% if config.get('dian_clave_tecnica') %}<span class="badge bg-success">✅ OK</span>{% else %}<span class="badge bg-warning">⚠️ Usar clave de prueba</span>{% endif %}</td>
+            </tr>
+            <tr>
+              <td><strong>Ambiente:</strong></td>
+              <td>
+                {% if config.get('dian_ambiente') == '1' %}
+                  <span class="badge bg-danger">🔴 PRODUCCIÓN</span>
+                {% else %}
+                  <span class="badge bg-warning">🟡 PRUEBAS</span>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+async function guardarEmpresa() {
+  const datos = {
+    empresa_nit: document.getElementById('empresa_nit').value,
+    empresa_digito_verificacion: document.getElementById('empresa_digito_verificacion').value,
+    empresa_nombre: document.getElementById('empresa_nombre').value,
+    empresa_nombre_comercial: document.getElementById('empresa_nombre_comercial').value,
+    empresa_direccion: document.getElementById('empresa_direccion').value,
+    empresa_codigo_postal: document.getElementById('empresa_codigo_postal').value,
+    empresa_telefono: document.getElementById('empresa_telefono').value,
+    empresa_email: document.getElementById('empresa_email').value,
+    empresa_municipio_codigo: document.getElementById('empresa_municipio_codigo').value,
+    empresa_municipio_nombre: document.getElementById('empresa_municipio_nombre').value,
+    empresa_departamento_codigo: document.getElementById('empresa_departamento_codigo').value,
+    empresa_departamento_nombre: document.getElementById('empresa_departamento_nombre').value,
+    empresa_tipo_persona: document.getElementById('empresa_tipo_persona').value,
+    empresa_regimen: document.getElementById('empresa_regimen').value,
+    empresa_pais_codigo: 'CO',
+    empresa_pais_nombre: 'Colombia',
+  };
+
+  try {
+    const res = await fetch("/configuracion/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos)
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("✅ Datos de empresa guardados correctamente");
+      location.reload();
+    } else {
+      alert("❌ Error: " + data.error);
+    }
+  } catch (err) {
+    alert("❌ Error de conexión: " + err.message);
+  }
+}
+
+async function guardarDIAN() {
+  const datos = {
+    dian_resolucion_numero: document.getElementById('dian_resolucion_numero').value,
+    dian_resolucion_fecha: document.getElementById('dian_resolucion_fecha').value,
+    dian_prefijo: document.getElementById('dian_prefijo').value,
+    dian_rango_desde: document.getElementById('dian_rango_desde').value,
+    dian_rango_hasta: document.getElementById('dian_rango_hasta').value,
+    dian_vigencia_desde: document.getElementById('dian_vigencia_desde').value,
+    dian_vigencia_hasta: document.getElementById('dian_vigencia_hasta').value,
+    dian_clave_tecnica: document.getElementById('dian_clave_tecnica').value,
+    dian_ambiente: document.getElementById('dian_ambiente').value,
+    dian_tipo_operacion: document.getElementById('dian_tipo_operacion').value,
+  };
+
+  try {
+    const res = await fetch("/configuracion/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos)
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("✅ Configuración DIAN guardada correctamente");
+      location.reload();
+    } else {
+      alert("❌ Error: " + data.error);
+    }
+  } catch (err) {
+    alert("❌ Error de conexión: " + err.message);
+  }
+}
+
+function generarCUFEPrueba() {
+  // Esta función debería llamar a un endpoint que genere un CUFE de prueba
+  alert("🚧 Función en desarrollo. Genera una factura real para probar el CUFE.");
+}
+
+function validarNIT() {
+  const nit = document.getElementById('nit-validar').value;
+  if (!nit) {
+    alert("Ingresa un NIT para validar");
+    return;
+  }
+  // Aquí iría la lógica de validación
+  alert("🚧 Función de validación en desarrollo");
+}
+</script>
+{% endblock %}
