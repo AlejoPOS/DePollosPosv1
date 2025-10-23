@@ -2,47 +2,147 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Login - De Pollos POS</title>
+    <title>Login - A&S System POS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background: #fff8f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .login-container {
+            display: flex;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            max-width: 900px;
+            width: 100%;
+        }
+        .login-banner {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            padding: 60px 40px;
+            color: white;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-banner h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #3498db;
+        }
+        .login-banner .subtitle {
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            color: #bdc3c7;
+        }
+        .login-banner .icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+        .login-banner ul {
+            text-align: left;
+            margin-top: 30px;
+            list-style: none;
+            padding: 0;
+        }
+        .login-banner ul li {
+            margin: 10px 0;
+            font-size: 0.95rem;
+        }
+        .login-banner ul li:before {
+            content: "✓ ";
+            color: #2ecc71;
+            font-weight: bold;
+            margin-right: 10px;
         }
         .login-box {
-            background: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-            width: 350px;
+            padding: 60px 50px;
+            flex: 1;
         }
-        h2 {
+        .login-box h2 {
             text-align: center;
-            margin-bottom: 1.5rem;
-            color: #cc6600;
+            margin-bottom: 30px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        .login-box .form-control {
+            border-radius: 10px;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+        .login-box .form-control:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        .login-box .btn-login {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .login-box .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        .alert {
+            border-radius: 10px;
+        }
+        @media (max-width: 768px) {
+            .login-banner {
+                display: none;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="login-box">
-        <h2>🐔 De Pollos POS</h2>
-        {% if error %}
-        <div class="alert alert-danger">{{ error }}</div>
-        {% endif %}
-        <form method="post">
-            <div class="mb-3">
-                <label class="form-label">Usuario</label>
-                <input type="text" name="usuario" class="form-control" required>
+    <div class="login-container">
+        <div class="login-banner">
+            <div class="icon">🏢</div>
+            <h1>A&S System</h1>
+            <div class="subtitle">Sistema POS Multi-Empresa</div>
+            <ul>
+                <li>Gestión de Facturación</li>
+                <li>Control de Inventario</li>
+                <li>Contabilidad Integrada</li>
+                <li>Reportes en Tiempo Real</li>
+                <li>Multi-empresa</li>
+            </ul>
+        </div>
+        
+        <div class="login-box">
+            <h2>Iniciar Sesión</h2>
+            {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+            <form method="post">
+                <div class="mb-4">
+                    <label class="form-label">Usuario</label>
+                    <input type="text" name="usuario" class="form-control" placeholder="Ingresa tu usuario" required autofocus>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" name="clave" class="form-control" placeholder="Ingresa tu contraseña" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-login w-100 text-white">
+                    Ingresar al Sistema
+                </button>
+            </form>
+            <div class="text-center mt-4">
+                <small class="text-muted">A&S System POS v2.0.0</small>
             </div>
-            <div class="mb-3">
-                <label class="form-label">Clave</label>
-                <input type="password" name="clave" class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-custom w-100 text-white" style="background:#ff6600;">Ingresar</button>
-        </form>
+        </div>
     </div>
 </body>
 </html>
