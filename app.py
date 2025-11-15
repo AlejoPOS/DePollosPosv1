@@ -292,7 +292,7 @@ def facturacion():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, nombres || ' ' || COALESCE(apellidos,'') as nombre FROM terceros WHERE tipo='Cliente'")
+        cur.execute("SELECT id, primer_nombre || ' ' || COALESCE(primer_apellido,'') as nombre FROM terceros WHERE tipo='Cliente'")
         clientes = cur.fetchall()
     except:
         clientes = []
