@@ -1314,6 +1314,208 @@ def configuracion_save():
     finally:
         if conn:
             conn.close()
+  # ======================================================================
+# SISTEMA DE CONFIGURACIÓN AVANZADO
+# ======================================================================
+
+from config_manager import (
+    CONFIGURACIONES,
+    obtener_todas_configuraciones,
+    guardar_configuracion,
+    validar_valor,
+    exportar_configuracion,
+    importar_configuracion
+)
+
+@app.route("/configuracion/completa")
+def configuracion_completa():
+    """Panel de configuración completo por categorías"""
+    if "user" not in session:
+        return redirect(url_for("login"))
+    
+    if session.get("rol") != "admin":
+        return redirect(url_for("index"))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        config_actual = obtener_todas_configuraciones(conn)
+        
+        return render_template(
+            "configuracion_completa.html",
+            user=session["user"],
+            categorias=CONFIGURACIONES,
+            config=config_actual
+        )
+    except Exception as e:
+        print(f"Error cargando configuración: {e}")
+        return f"Error: {str(e)}", 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/configuracion/guardar", methods=["POST"])
+def api_configuracion_guardar():
+    """Guarda múltiples configuraciones"""
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    if session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "Solo administradores"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+        
+        errores = []
+        guardados = 0
+        
+        for clave, valor in data.items():
+            # Buscar definición del campo
+            campo_def = None
+            for cat_info in CONFIGURACIONES.values():
+                for campo in cat_info["campos"]:
+                    if campo["clave"] == clave:
+                        campo_def = campo
+                        break
+                if campo_def:
+                    break
+            
+            if not campo_def:
+                continue  # Campo no reconocido, ignorar
+            
+            # Validar
+            es_valido, mensaje = validar_valor(campo_def, str(valor))
+            if not es_valido:
+                errores.append(f"{campo_def['nombre']}: {mensaje}")
+                continue
+            
+            # Guardar
+            exito, msg = guardar_configuracion(conn, clave, str(valor))
+            if exito:
+                guardados += 1
+            else:
+                errores.append(f"{campo_def['nombre']}: {msg}")
+        
+        if errores:
+            return jsonify({
+                "success": False,
+                "error": "Algunos campos tienen errores",
+                "errores": errores,
+                "guardados": guardados
+            })
+        
+        return jsonify({
+            "success": True,
+            "mensaje": f"{guardados} configuraciones guardadas correctamente"
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error guardando configuración: {e}")
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/configuracion/exportar", methods=["GET"])
+def api_configuracion_exportar():
+    """Exporta la configuración completa"""
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    if session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "Solo administradores"})
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        datos = exportar_configuracion(conn)
+        
+        return jsonify({
+            "success": True,
+            "datos": datos
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/configuracion/importar", methods=["POST"])
+def api_configuracion_importar():
+    """Importa configuración desde JSON"""
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    if session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "Solo administradores"})
+    
+    conn = None
+    try:
+        datos = request.get_json()
+        conn = get_db_connection()
+        
+        exito, mensaje, contador = importar_configuracion(conn, datos)
+        
+        return jsonify({
+            "success": exito,
+            "mensaje": mensaje,
+            "importados": contador
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/configuracion/restaurar_defaults", methods=["POST"])
+def api_configuracion_restaurar_defaults():
+    """Restaura valores por defecto de una categoría"""
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No autorizado"})
+    
+    if session.get("rol") != "admin":
+        return jsonify({"success": False, "error": "Solo administradores"})
+    
+    conn = None
+    try:
+        data = request.get_json()
+        categoria = data.get("categoria")
+        
+        if categoria not in CONFIGURACIONES:
+            return jsonify({"success": False, "error": "Categoría inválida"})
+        
+        conn = get_db_connection()
+        contador = 0
+        
+        for campo in CONFIGURACIONES[categoria]["campos"]:
+            exito, _ = guardar_configuracion(
+                conn,
+                campo["clave"],
+                campo["valor_default"]
+            )
+            if exito:
+                contador += 1
+        
+        return jsonify({
+            "success": True,
+            "mensaje": f"{contador} valores restaurados",
+            "restaurados": contador
+        })
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # ======================================================================
 # COPIAS DE SEGURIDAD Y RESET
