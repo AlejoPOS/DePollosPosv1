@@ -479,6 +479,7 @@ def obtener_datos_factura_para_pdf(conn, factura_id):
         cantidad = float(item['cantidad'])
         precio = float(item['precio'])
         valor_impuesto = item.get('impuesto_porcentaje', 19)
+        iva_porcentaje = float(valor_impuesto if valor_impuesto is not None else 19)
         
         precio_sin_iva = precio / (1 + (iva_porcentaje / 100))
         subtotal_item = precio_sin_iva * cantidad
